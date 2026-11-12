@@ -146,7 +146,8 @@ po_confirm = _po_action(
                                       notes=r.POST.get("notes", ""), by=r.user.get_username()),
     "PO confirmed.",
 )
-po_create_shipment = _po_action(lambda po, r: services.create_shipment_for_po(po), "Shipment created from PO.")
+po_create_shipment = _po_action(lambda po, r: services.create_shipment_for_po(po, approved_by=r.user),
+                                "Shipment created from PO.")
 po_create_bill = _po_action(
     lambda po, r: services.create_bill_from_po(po, r.POST.get("vendor_invoice_number") or "TBD",
                                                r.POST.get("bill_date") or datetime.date.today()),
@@ -183,7 +184,8 @@ class ShipmentList(ErpListView):
     select_related = ("vendor", "forwarder")
 
     def get_filters(self):
-        return (("status", "Status", Shipment.STATUSES), ("mode", "Mode", Shipment.MODES))
+        return (("status", "Status", Shipment.STATUSES), ("mode", "Mode", Shipment.MODES),
+                ("approved", "Approval", [("True", "Approved"), ("False", "Pending approval")]))
 
 
 class ShipmentFormMixin:
@@ -201,6 +203,8 @@ class ShipmentFormMixin:
 
     def after_save(self, form):
         services.validate_shipment_lines(self.object)
+        if not self.object.approved and not self.object.created_via_portal:
+            services.approve_shipment(self.object, self.request.user)  # booked by staff = approved
 
 
 class ShipmentCreate(ShipmentFormMixin, ErpCreateView):
@@ -268,6 +272,10 @@ shipment_receive = _shipment_action(
     lambda s, r: services.receive_shipment(s, r.POST.get("date") or datetime.date.today(), r.user),
     "Shipment received into inventory with landed costs capitalized.",
 )
+shipment_approve = _shipment_action(lambda s, r: services.approve_shipment(s, r.user),
+                                    "Booking approved — quantities now count as Booked & Approved.")
+shipment_unapprove = _shipment_action(lambda s, r: services.unapprove_shipment(s, r.user),
+                                      "Approval removed — booking is pending again.")
 shipment_estimate_duty = _shipment_action(lambda s, r: services.estimate_duty(s),
                                           "Duty estimated from product duty rates.")
 

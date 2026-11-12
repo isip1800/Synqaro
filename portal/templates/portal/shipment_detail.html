@@ -1,6 +1,6 @@
 {% extends "portal/base.html" %}{% load erp %}
 {% block content %}
-<div class="page-head"><div><h1>Shipment {{ s.number }} {% status_badge s %}</h1><div class="sub">{{ s.get_mode_display }} · {{ s.origin_port|default:"?" }} → {{ s.destination_port|default:"?" }}</div></div>
+<div class="page-head"><div><h1>Shipment {{ s.number }} {% status_badge s %} {% if s.approved %}<span class="badge badge-paid">Approved by buyer</span>{% elif s.status != 'received' %}<span class="badge badge-partial">Awaiting buyer approval</span>{% endif %}</h1><div class="sub">{{ s.get_mode_display }} · {{ s.origin_port|default:"?" }} → {{ s.destination_port|default:"?" }}</div></div>
 <div class="actions">{% if editable %}<a class="btn" href="{% url 'portal:shipment_update' s.pk %}">Update details</a>{% endif %}</div></div>
 <div class="card"><dl class="dl-grid">
   <div><dt>Carrier</dt><dd>{{ s.carrier|default:"—" }}</dd></div><div><dt>Vessel / voyage</dt><dd>{{ s.vessel_voyage|default:"—" }}</dd></div>

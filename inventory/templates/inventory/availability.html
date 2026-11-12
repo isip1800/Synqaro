@@ -1,0 +1,32 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><div><h1>Inventory Availability</h1><div class="sub">Quantity buckets by item{% if wh %} for the selected warehouse{% else %} across all warehouses{% endif %}. Click a number to see the orders and shipments behind it.</div></div>
+  <div class="actions"><a class="btn" href="{% url 'inventory:availability_export' %}?{{ query }}">⬇ Export to Excel</a></div></div>
+<form class="toolbar" method="get">
+  <input type="search" name="q" value="{{ params.q }}" placeholder="SKU, name, UPC…">
+  <select name="warehouse" onchange="this.form.submit()"><option value="">All warehouses</option>{% for w in warehouses %}<option value="{{ w.pk }}" {% if wh == w.pk|stringformat:"s" %}selected{% endif %}>{{ w.code }}</option>{% endfor %}</select>
+  <select name="tier1" onchange="this.form.submit()"><option value="">Class: all</option>{% for c in tier1 %}<option value="{{ c.pk }}" {% if params.tier1 == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.code }} — {{ c.description }}</option>{% endfor %}</select>
+  <select name="item_class" onchange="this.form.submit()"><option value="">Product type: all</option>{% for c in tier3 %}<option value="{{ c.pk }}" {% if params.item_class == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.full_code }}</option>{% endfor %}</select>
+  <select name="brand" onchange="this.form.submit()"><option value="">Brand: all</option>{% for v in brands %}<option value="{{ v.pk }}" {% if params.brand == v.pk|stringformat:"s" %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+  <select name="season" onchange="this.form.submit()"><option value="">Season: all</option>{% for v in seasons %}<option value="{{ v.pk }}" {% if params.season == v.pk|stringformat:"s" %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+  <select name="show" onchange="this.form.submit()"><option value="active">Items with activity</option><option value="short" {% if params.show == "short" %}selected{% endif %}>Short (orders &gt; stock)</option><option value="all" {% if params.show == "all" %}selected{% endif %}>All items</option></select>
+  <button class="btn">Filter</button>
+</form>
+<div class="card table-wrap" style="max-height:72vh">
+<table class="table avail">
+  <thead>
+    <tr><th colspan="3"></th>{% for g, n in groups %}<th class="grp" colspan="{{ n }}">{{ g }}</th>{% endfor %}</tr>
+    <tr><th></th><th>SKU</th><th>Description</th>{% for c in cols %}<th class="num {% if c.start %}g-start{% endif %}" title="{{ c.help }}">{{ c.label }}</th>{% endfor %}</tr>
+  </thead>
+  <tbody>
+  {% for p, cells in table %}{% with img=p.primary_image %}<tr>
+    <td>{% if img %}<img class="thumb" src="{{ img.thumb_url }}" alt="" loading="lazy">{% endif %}</td>
+    <td><a href="{{ p.get_absolute_url }}#tab-availability">{{ p.sku }}</a></td>
+    <td style="min-width:180px">{{ p.name }}</td>
+    {% for c, v in cells %}<td class="num {% if c.start %}g-start{% endif %} {% if c.formula %}formula{% endif %} {% if v < 0 %}neg{% elif not v %}zero{% endif %}">{% if c.drill and v %}<a href="{% url 'inventory:availability_detail' p.pk c.key %}{% if wh %}?warehouse={{ wh }}{% endif %}">{{ v|qty }}</a>{% else %}{{ v|qty }}{% endif %}</td>{% endfor %}
+  </tr>{% endwith %}{% empty %}<tr><td colspan="30" class="empty">No items match.</td></tr>{% endfor %}
+  </tbody>
+  <tfoot><tr><td></td><td colspan="2">Total</td>{% for c, v in totals %}<td class="num {% if c.start %}g-start{% endif %} {% if v < 0 %}neg{% endif %}">{{ v|qty }}</td>{% endfor %}</tr></tfoot>
+</table></div>
+<div class="card"><h3>How each bucket is calculated</h3><div class="legend">{% for c in cols %}<div><b>{{ c.label }}</b>{{ c.help }}</div>{% endfor %}</div></div>
+{% endblock %}

@@ -102,6 +102,9 @@ def shipment_form(request, pk=None):
                     obj.warehouse = default_warehouse()
                     if obj.warehouse is None:
                         raise ValidationError("No receiving warehouse is configured. Please contact the buyer.")
+                lines_changed = formset.has_changed()
+                if obj.pk and obj.approved and lines_changed:
+                    obj.approved, obj.approved_at, obj.approved_by = False, None, None
                 obj.save()
                 formset.instance = obj
                 formset.save()

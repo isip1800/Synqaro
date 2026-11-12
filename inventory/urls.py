@@ -9,6 +9,9 @@ from .models import StockAdjustment, StockAdjustmentLine, StockTransfer, StockTr
 app_name = "inventory"
 
 urlpatterns = [
+    path("availability/", views.availability_view, name="availability"),
+    path("availability/export.xlsx", views.availability_export, name="availability_export"),
+    path("availability/<int:pk>/<str:bucket>/", views.availability_detail, name="availability_detail"),
     path("stock/", views.stock, name="stock"),
     path("reorder/", views.reorder, name="reorder"),
     path("moves/", views.MoveList.as_view(), name="moves"),

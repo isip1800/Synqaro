@@ -59,11 +59,35 @@ def close_po(po):
     po.save(update_fields=["status"])
 
 
-def create_shipment_for_po(po, **fields):
-    """Create a planned shipment carrying every unshipped quantity on the PO."""
+def approve_shipment(shipment, user=None):
+    """Buyer approves a booking (e.g. a vendor's advance shipping notice)."""
+    if shipment.status in (Shipment.RECEIVED, Shipment.CANCELLED):
+        raise ValidationError("Shipment is already closed.")
+    if not shipment.lines.exists():
+        raise ValidationError("Shipment has no goods to approve.")
+    validate_shipment_lines(shipment)
+    shipment.approved, shipment.approved_at = True, timezone.now()
+    shipment.approved_by = user if getattr(user, "is_authenticated", False) else None
+    shipment.save(update_fields=["approved", "approved_at", "approved_by"])
+    return shipment
+
+
+def unapprove_shipment(shipment, user=None):
+    if shipment.status in (Shipment.RECEIVED, Shipment.CANCELLED):
+        raise ValidationError("Shipment is already closed.")
+    shipment.approved, shipment.approved_at, shipment.approved_by = False, None, None
+    shipment.save(update_fields=["approved", "approved_at", "approved_by"])
+    return shipment
+
+
+def create_shipment_for_po(po, approved_by=None, **fields):
+    """Create a planned shipment carrying every unshipped quantity on the PO (approved: booked by the buyer)."""
     if po.status not in PurchaseOrder.OPEN_STATUSES:
         raise ValidationError("PO must be sent or confirmed before booking a shipment.")
-    shipment = Shipment.objects.create(vendor=po.vendor, incoterm=po.incoterm, warehouse=po.warehouse, **fields)
+    shipment = Shipment.objects.create(vendor=po.vendor, incoterm=po.incoterm, warehouse=po.warehouse,
+                                       approved=True, approved_at=timezone.now(),
+                                       approved_by=approved_by if getattr(approved_by, "is_authenticated", False)
+                                       else None, **fields)
     for line in po.lines.all():
         if line.qty_unshipped > 0:
             ShipmentLine.objects.create(shipment=shipment, po_line=line, quantity=line.qty_unshipped)

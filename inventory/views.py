@@ -131,3 +131,155 @@ class AdjustmentDetail(ErpDetailView):
 class TransferDetail(ErpDetailView):
     model = StockTransfer
     template_name = "inventory/transfer_detail.html"
+
+
+# ----------------------------------------------------------------------------- quantity buckets / availability
+
+def _availability_rows(request):
+    from django.db.models import Q
+
+    from . import availability
+
+    g = request.GET
+    products = Product.objects.filter(is_active=True).select_related("item_class__parent__parent", "brand", "season") \
+        .prefetch_related("images")
+    if g.get("q"):
+        q = g["q"].strip()
+        products = products.filter(Q(sku__icontains=q) | Q(name__icontains=q) | Q(barcode__icontains=q))
+    if g.get("tier1"):
+        products = products.filter(item_class__parent__parent_id=g["tier1"])
+    if g.get("item_class"):
+        products = products.filter(item_class_id=g["item_class"])
+    if g.get("brand"):
+        products = products.filter(brand_id=g["brand"])
+    if g.get("season"):
+        products = products.filter(season_id=g["season"])
+    products = list(products.order_by("sku"))
+    wh = g.get("warehouse") or None
+    data = availability.compute([p.pk for p in products], wh)
+    rows = []
+    for p in products:
+        b = data[p.pk]
+        if g.get("show") == "short" and b["ats"] >= 0:
+            continue
+        if g.get("show", "active") == "active" and not any(b[k] for k in availability.BUCKET_KEYS):
+            continue
+        rows.append((p, b))
+    return rows, wh
+
+
+@internal_required
+def availability_view(request):
+    from itertools import groupby
+
+    from products.models import LookupValue
+
+    from . import availability
+
+    rows, wh = _availability_rows(request)
+    groups = [(g, len(list(items))) for g, items in groupby(availability.BUCKETS, key=lambda b: b[2])]
+    cols, prev = [], None
+    for key, label, group, help_text in availability.BUCKETS:
+        cols.append({"key": key, "label": label, "help": help_text, "start": group != prev,
+                     "formula": key in availability.FORMULAS, "drill": key in availability.DRILLABLE})
+        prev = group
+    table = [(p, [(c, b[c["key"]]) for c in cols]) for p, b in rows]
+    totals = [(c, sum((b[c["key"]] for _, b in rows), ZERO)) for c in cols]
+    return render(request, "inventory/availability.html", {
+        "title": "Inventory Availability", "table": table, "cols": cols, "groups": groups,
+        "totals": totals,
+        "warehouses": Warehouse.objects.filter(is_active=True), "params": request.GET, "wh": wh or "",
+        "tier1": ItemClass.objects.filter(level=1),
+        "tier3": ItemClass.objects.filter(level=3).select_related("parent__parent"),
+        "brands": LookupValue.objects.filter(kind="brand", is_active=True),
+        "seasons": LookupValue.objects.filter(kind="season", is_active=True),
+        "query": request.GET.urlencode(),
+    })
+
+
+@internal_required
+def availability_detail(request, pk, bucket):
+    from django.http import Http404
+    from django.shortcuts import get_object_or_404
+
+    from . import availability
+
+    if bucket not in availability.DRILLABLE:
+        raise Http404
+    product = get_object_or_404(Product, pk=pk)
+    wh = request.GET.get("warehouse") or None
+    meta = {b[0]: b for b in availability.BUCKETS}[bucket]
+    rows = availability.detail_rows(product, bucket, wh)
+    return render(request, "inventory/availability_detail.html", {
+        "title": f"{product.sku} — {meta[1]}", "product": product, "bucket": meta, "rows": rows,
+        "total": sum((r["qty"] for r in rows), ZERO),
+        "warehouse": Warehouse.objects.filter(pk=wh).first() if wh else None,
+    })
+
+
+@internal_required
+def availability_export(request):
+    import datetime
+    import io
+
+    import xlsxwriter
+    from django.http import HttpResponse
+
+    from products.services import _sanitize_xlsx
+
+    from . import availability
+
+    rows, wh = _availability_rows(request)
+    out = io.BytesIO()
+    wb = xlsxwriter.Workbook(out, {"in_memory": False})
+    ws = wb.add_worksheet("Availability")
+    grp = wb.add_format({"bold": True, "align": "center", "bg_color": "#D9E1F2", "border": 1})
+    head = wb.add_format({"bold": True, "bg_color": "#E8ECF2", "border": 1, "text_wrap": True, "valign": "top"})
+    num = wb.add_format({"num_format": "#,##0;[Red]-#,##0", "valign": "vcenter"})
+    bold = wb.add_format({"num_format": "#,##0;[Red]-#,##0", "bold": True, "valign": "vcenter"})
+    txt = wb.add_format({"valign": "vcenter", "text_wrap": True})
+    fixed = ["Image", "SKU", "Description", "Item Class"]
+    widths = [12, 14, 30, 26]
+    col = len(fixed)
+    from itertools import groupby
+
+    for g, items in groupby(availability.BUCKETS, key=lambda b: b[2]):
+        items = list(items)
+        if len(items) > 1:
+            ws.merge_range(0, col, 0, col + len(items) - 1, g, grp)
+        else:
+            ws.write(0, col, g, grp)
+        col += len(items)
+    for c, (title, w) in enumerate(zip(fixed, widths)):
+        ws.write(1, c, title, head)
+        ws.set_column(c, c, w)
+    for i, (key, label, _g, help_text) in enumerate(availability.BUCKETS):
+        c = len(fixed) + i
+        ws.write(1, c, label, head)
+        ws.write_comment(1, c, help_text)
+        ws.set_column(c, c, 11)
+    ws.set_row(1, 42)
+    ws.freeze_panes(2, 2)
+    for r, (p, b) in enumerate(rows, start=2):
+        ws.set_row(r, 60)
+        img = p.primary_image
+        if img:
+            ws.insert_image(r, 0, f"{p.sku}.jpg", {"image_data": io.BytesIO(bytes(img.thumbnail)),
+                                                   "x_scale": 0.31, "y_scale": 0.31, "x_offset": 3, "y_offset": 3,
+                                                   "object_position": 1})
+        ws.write(r, 1, p.sku, txt)
+        ws.write(r, 2, p.name, txt)
+        ws.write(r, 3, p.item_class.full_code if p.item_class else "", txt)
+        for i, key in enumerate(availability.BUCKET_KEYS):
+            ws.write_number(r, len(fixed) + i, float(b[key]), bold if key in availability.FORMULAS else num)
+    total_row = len(rows) + 2
+    ws.write(total_row, 1, "TOTAL", head)
+    for i, key in enumerate(availability.BUCKET_KEYS):
+        c = len(fixed) + i
+        ws.write_number(total_row, c, float(sum((b[key] for _, b in rows), ZERO)), bold)
+    wb.close()
+    resp = HttpResponse(_sanitize_xlsx(out.getvalue()),
+                        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    suffix = f"-{Warehouse.objects.get(pk=wh).code}" if wh else ""
+    resp["Content-Disposition"] = f'attachment; filename="availability{suffix}-{datetime.date.today():%Y%m%d}.xlsx"'
+    return resp

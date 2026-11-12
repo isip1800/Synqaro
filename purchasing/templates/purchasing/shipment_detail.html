@@ -1,10 +1,13 @@
 {% extends "base.html" %}{% load erp %}
 {% block content %}
 <div class="page-head">
-  <div><h1>Shipment {{ object.number }} {% status_badge object %}</h1>
+  <div><h1>Shipment {{ object.number }} {% status_badge object %}
+    {% if object.status != 'received' and object.status != 'cancelled' %}{% if object.approved %}<span class="badge badge-paid">Approved</span>{% else %}<span class="badge badge-partial">Pending approval</span>{% endif %}{% endif %}</h1>
   <div class="sub">{{ object.vendor|default:"No shipper" }} · {{ object.get_mode_display }} · {{ object.origin_port|default:"?" }} → {{ object.destination_port|default:"?" }} · to {{ object.warehouse.code }}</div></div>
   <div class="actions">
     {% if object.status != 'received' and object.status != 'cancelled' %}
+      {% if object.approved %}<form method="post" action="{% url 'purchasing:shipment_unapprove' object.pk %}">{% csrf_token %}<button class="btn">Unapprove</button></form>
+      {% else %}<form method="post" action="{% url 'purchasing:shipment_approve' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Approve booking</button></form>{% endif %}
       <a class="btn" href="{% url 'purchasing:shipment_update' object.pk %}">Edit / update status</a>
       <form method="post" action="{% url 'purchasing:shipment_estimate_duty' object.pk %}">{% csrf_token %}<button class="btn">Estimate duty</button></form>
       <form method="post" action="{% url 'purchasing:shipment_receive' object.pk %}" class="inline-form" onsubmit="return confirm('Receive all goods and capitalize landed costs?')">{% csrf_token %}
@@ -13,6 +16,7 @@
     <a class="btn" href="{% url 'accounting:vendorbill_create' %}?shipment={{ object.pk }}{% if object.forwarder %}&vendor={{ object.forwarder.pk }}{% endif %}">+ Freight / duty bill</a>
   </div>
 </div>
+{% if not object.approved and object.status != 'received' and object.status != 'cancelled' %}<div class="msg msg-warning">{% if object.created_via_portal %}The vendor submitted this shipping notice through the portal.{% else %}This booking is not approved.{% endif %} Review the goods and quantities below and click <strong>Approve booking</strong>.</div>{% elif object.approved and object.approved_at %}<p class="muted">Approved {{ object.approved_at|date:"Y-m-d H:i" }}{% if object.approved_by %} by {{ object.approved_by }}{% endif %}.</p>{% endif %}
 <div class="card"><div class="timeline">{% for t in timeline %}<div class="step {% if t.done %}done{% endif %} {% if t.current %}current{% endif %}">{{ t.label }}</div>{% endfor %}</div></div>
 <div class="kpis">
   <div class="kpi"><div class="label">Goods value (base)</div><div class="value">{{ object.goods_value_base|money }}</div></div>

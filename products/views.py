@@ -163,6 +163,18 @@ class ProductDetail(ErpDetailView):
             .select_related("order", "order__vendor"),
             hts_row=p.hts_match, company=Company.get(),
         )
+        from inventory import availability
+
+        whs = [w["warehouse"] for w in warehouses] or list(Warehouse.objects.filter(is_active=True)[:1])
+        total = availability.for_product(p)
+        per_wh = [(w, availability.for_product(p, w.pk)) for w in whs] if len(whs) > 1 else []
+        ctx["avail_rows"] = [
+            {"key": key, "label": label, "group": group, "help": help_text, "total": total[key],
+             "per_wh": [b[key] for _, b in per_wh], "formula": key in availability.FORMULAS,
+             "drill": key in availability.DRILLABLE}
+            for key, label, group, help_text in availability.BUCKETS
+        ]
+        ctx["avail_whs"] = [w for w, _ in per_wh]
         return ctx
 
 
