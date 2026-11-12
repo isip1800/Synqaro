@@ -44,6 +44,28 @@ DRILLABLE = {"on_hand", "so_quote", "so_pending", "so_open", "so_partial", "so_b
              "po_new", "po_open", "po_closed", "booked", "booked_approved", "in_transit"}
 FORMULAS = {"open_orders", "ats", "in_transit_available", "ats_in_transit", "booked_available",
             "available_to_sell"}
+# Formula fields that can be set to show 0 instead of negative (per screen, in Settings -> Company)
+FLOORABLE = [(k, label) for k, label, _g, _h in BUCKETS if k in FORMULAS and k != "open_orders"]
+SCREENS = {
+    "inventory": {"title": "Inventory Availability", "setting": "avail_no_negative", "url": "inventory:availability"},
+    "sales": {"title": "Sales Availability", "setting": "sales_avail_no_negative",
+              "url": "inventory:sales_availability"},
+}
+
+
+def floor_keys(screen):
+    from core.models import Company
+
+    return set(getattr(Company.get(), SCREENS[screen]["setting"]) or [])
+
+
+def apply_floor(buckets, keys):
+    """Bucket values with the given formula fields floored at 0 (display only; stored math is unchanged)."""
+    values = {k: buckets[k] for k in BUCKET_KEYS}
+    for k in keys:
+        if values[k] < 0:
+            values[k] = ZERO
+    return values
 
 
 @dataclass

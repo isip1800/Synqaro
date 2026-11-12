@@ -10,6 +10,8 @@ app_name = "inventory"
 
 urlpatterns = [
     path("availability/", views.availability_view, name="availability"),
+    path("sales-availability/", views.sales_availability_view, name="sales_availability"),
+    path("availability/definitions/", views.availability_definitions, name="availability_definitions"),
     path("availability/export.xlsx", views.availability_export, name="availability_export"),
     path("availability/<int:pk>/<str:bucket>/", views.availability_detail, name="availability_detail"),
     path("stock/", views.stock, name="stock"),

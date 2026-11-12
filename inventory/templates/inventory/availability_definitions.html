@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h1>Availability Bucket Definitions</h1><div class="sub">How each column on the Inventory Availability and Sales Availability screens is calculated.</div></div>
+<div class="actions"><a class="btn" href="{% url 'inventory:availability' %}">Inventory Availability</a><a class="btn" href="{% url 'inventory:sales_availability' %}">Sales Availability</a></div></div>
+<div class="card table-wrap"><table class="table"><thead><tr><th>Group</th><th>Bucket</th><th>Calculation</th></tr></thead><tbody>
+{% for key, label, group, help in buckets %}<tr><td class="muted">{% ifchanged group %}{{ group }}{% endifchanged %}</td><td><strong>{{ label }}</strong></td><td>{{ help }}</td></tr>{% endfor %}
+</tbody></table></div>
+<div class="card"><h3>Negative numbers</h3>
+<p class="muted">Each screen can show 0 instead of a negative number for chosen fields. Set this in <a href="{% url 'core:company' %}">Settings → Company</a>.</p>
+<ul>{% for title, fields in screens %}<li><strong>{{ title }}:</strong> {% if fields %}{{ fields|join:", " }} show 0 when negative{% else %}all negatives shown{% endif %}</li>{% endfor %}</ul>
+<p class="muted">This only changes what is displayed; the drill-downs and underlying documents are unaffected.</p></div>
+{% endblock %}

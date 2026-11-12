@@ -120,6 +120,7 @@ class PODetail(ErpDetailView):
             shipments=Shipment.objects.filter(lines__po_line__order=po).distinct(),
             today=datetime.date.today(),
             base=Company.get().base_currency_id,
+            fs=po.fs_totals,
         )
         return ctx
 

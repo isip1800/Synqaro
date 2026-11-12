@@ -8,7 +8,8 @@ PO_FIELDS = ["vendor", "order_date", "expected_date", "currency", "exchange_rate
              "payment_terms", "vendor_reference", "notes"]
 PurchaseOrderForm = model_form(PurchaseOrder, PO_FIELDS)
 POLineFormSet = line_formset(PurchaseOrder, PurchaseOrderLine,
-                             ["product", "warehouse", "description", "quantity", "unit_price"], extra=4,
+                             ["product", "warehouse", "description", "quantity", "unit_price", "fs_cost_usd"],
+                             extra=4,
                              form=LineWarehouseForm)
 
 SHIPMENT_FIELDS = [

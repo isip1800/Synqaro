@@ -1,4 +1,4 @@
-<label class="field {% if field.errors %}has-error{% endif %} {% if field.field.widget.input_type == 'checkbox' %}checkbox{% endif %}">
+<label class="field {% if field.errors %}has-error{% endif %} {% if field.widget_type == 'checkbox' %}checkbox{% endif %} {% if field.widget_type == 'checkboxselectmultiple' %}field-wide multi-check{% endif %}">
   <span>{{ field.label }}{% if field.field.required %} *{% endif %}</span>
   {{ field }}
   {% if field.help_text %}<small class="muted">{{ field.help_text }}</small>{% endif %}

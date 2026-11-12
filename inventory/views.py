@@ -168,26 +168,54 @@ def _availability_rows(request):
     return rows, wh
 
 
-@internal_required
 def availability_view(request):
+    return _availability_screen(request, "inventory")
+
+
+def sales_availability_view(request):
+    return _availability_screen(request, "sales")
+
+
+@internal_required
+def availability_definitions(request):
+    from . import availability
+
+    from core.models import Company
+
+    company = Company.get()
+    labels = dict(availability.FLOORABLE)
+    screens = [(cfg["title"], [labels[k] for k, _ in availability.FLOORABLE
+                               if k in (getattr(company, cfg["setting"]) or [])])
+               for cfg in availability.SCREENS.values()]
+    return render(request, "inventory/availability_definitions.html", {
+        "title": "Availability Bucket Definitions", "buckets": availability.BUCKETS, "screens": screens,
+    })
+
+
+@internal_required
+def _availability_screen(request, screen):
     from itertools import groupby
 
     from products.models import LookupValue
 
     from . import availability
 
+    cfg = availability.SCREENS[screen]
+    floored = availability.floor_keys(screen)
     rows, wh = _availability_rows(request)
+    rows = [(p, availability.apply_floor(b, floored)) for p, b in rows]
     groups = [(g, len(list(items))) for g, items in groupby(availability.BUCKETS, key=lambda b: b[2])]
     cols, prev = [], None
     for key, label, group, help_text in availability.BUCKETS:
         cols.append({"key": key, "label": label, "help": help_text, "start": group != prev,
-                     "formula": key in availability.FORMULAS, "drill": key in availability.DRILLABLE})
+                     "formula": key in availability.FORMULAS, "drill": key in availability.DRILLABLE,
+                     "floored": key in floored})
         prev = group
     table = [(p, [(c, b[c["key"]]) for c in cols]) for p, b in rows]
     totals = [(c, sum((b[c["key"]] for _, b in rows), ZERO)) for c in cols]
     return render(request, "inventory/availability.html", {
-        "title": "Inventory Availability", "table": table, "cols": cols, "groups": groups,
-        "totals": totals,
+        "title": cfg["title"], "screen": screen, "screen_url": cfg["url"], "floored": floored,
+        "table": table, "cols": cols, "groups": groups, "totals": totals,
         "warehouses": Warehouse.objects.filter(is_active=True), "params": request.GET, "wh": wh or "",
         "tier1": ItemClass.objects.filter(level=1),
         "tier3": ItemClass.objects.filter(level=3).select_related("parent__parent"),
@@ -229,10 +257,13 @@ def availability_export(request):
 
     from . import availability
 
+    screen = request.GET.get("screen") if request.GET.get("screen") in availability.SCREENS else "inventory"
+    floored = availability.floor_keys(screen)
     rows, wh = _availability_rows(request)
+    rows = [(p, availability.apply_floor(b, floored)) for p, b in rows]
     out = io.BytesIO()
     wb = xlsxwriter.Workbook(out, {"in_memory": False})
-    ws = wb.add_worksheet("Availability")
+    ws = wb.add_worksheet(availability.SCREENS[screen]["title"][:31])
     grp = wb.add_format({"bold": True, "align": "center", "bg_color": "#D9E1F2", "border": 1})
     head = wb.add_format({"bold": True, "bg_color": "#E8ECF2", "border": 1, "text_wrap": True, "valign": "top"})
     num = wb.add_format({"num_format": "#,##0;[Red]-#,##0", "valign": "vcenter"})
@@ -264,9 +295,11 @@ def availability_export(request):
         ws.set_row(r, 60)
         img = p.primary_image
         if img:
+            longest = max(img.width, img.height, 1)
+            scale = 74 / min(240, longest)  # thumbnails are at most 240px; fit ~74px inside the cell
             ws.insert_image(r, 0, f"{p.sku}.jpg", {"image_data": io.BytesIO(bytes(img.thumbnail)),
-                                                   "x_scale": 0.31, "y_scale": 0.31, "x_offset": 3, "y_offset": 3,
-                                                   "object_position": 1})
+                                                   "x_scale": scale, "y_scale": scale, "x_offset": 3,
+                                                   "y_offset": 3, "object_position": 1})
         ws.write(r, 1, p.sku, txt)
         ws.write(r, 2, p.name, txt)
         ws.write(r, 3, p.item_class.full_code if p.item_class else "", txt)
@@ -281,5 +314,6 @@ def availability_export(request):
     resp = HttpResponse(_sanitize_xlsx(out.getvalue()),
                         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     suffix = f"-{Warehouse.objects.get(pk=wh).code}" if wh else ""
-    resp["Content-Disposition"] = f'attachment; filename="availability{suffix}-{datetime.date.today():%Y%m%d}.xlsx"'
+    name = "sales-availability" if screen == "sales" else "availability"
+    resp["Content-Disposition"] = f'attachment; filename="{name}{suffix}-{datetime.date.today():%Y%m%d}.xlsx"'
     return resp

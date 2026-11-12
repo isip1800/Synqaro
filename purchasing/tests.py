@@ -131,3 +131,47 @@ class ImportFlowTests(TestCase):
             services.receive_po(po, {po.lines.first().pk: D(7)}, TODAY)
         with self.assertRaises(ValidationError):
             services.cancel_po(po)
+
+
+class FirstSaleTests(TestCase):
+    def setUp(self):
+        self.f = Fixture()
+
+    def test_fs_cost_rmb_and_extensions(self):
+        from core.models import ExchangeRate
+
+        # USD PO; RMB from the CNY rate on the order date: 1 RMB = 0.147267 USD  (≈ 6.79 RMB per USD)
+        ExchangeRate.objects.create(currency_id="CNY", date=TODAY, rate=D("0.147267"))
+        po = self.f.po([(self.f.a, 10800, "0.20")], vendor=self.f.usd_vendor, rate=D(1), currency="USD", send=False)
+        line = po.lines.first()
+        line.fs_cost_usd = D("0.1401")
+        line.save()
+        self.assertEqual(line.fs_cost_rmb, D("0.9513"))
+        self.assertEqual(line.ext_fs_cost_usd, D("1513.08"))
+        self.assertEqual(line.ext_fs_cost_rmb, D("10274.04"))
+        self.assertEqual(po.fs_totals["usd"], D("1513.08"))
+
+    def test_rmb_po_uses_its_own_rate(self):
+        po = self.f.po([(self.f.a, 100, "1.00")], send=False)  # CNY PO at 0.14
+        line = po.lines.first()
+        line.fs_cost_usd = D("0.14")
+        line.save()
+        self.assertEqual(line.fs_cost_rmb, D("1.0000"))
+
+    def test_duty_estimate_uses_first_sale_value(self):
+        # A: 100 @ 100 CNY = 1,400 USD goods, duty 5%; with FS cost 10 USD -> dutiable 1,000 -> duty 50
+        po = self.f.po([(self.f.a, 100, 100)])
+        line = po.lines.first()
+        line.fs_cost_usd = D("10")
+        line.save()
+        ship = services.create_shipment_for_po(po)
+        self.assertEqual(services.estimate_duty(ship).amount, D("50.00"))
+        line.fs_cost_usd = D("0")
+        line.save()
+        self.assertEqual(services.estimate_duty(ship).amount, D("70.00"))  # falls back to goods value
+        self.client.login(username="admin", password="pw-admin-123")
+        line.fs_cost_usd = D("10")
+        line.save()
+        page = self.client.get(f"/purchasing/orders/{po.pk}/").content.decode()
+        self.assertIn("Ext FS Cost RMB", page)
+        self.assertIn("Dutiable value", self.client.get(f"/purchasing/shipments/{ship.pk}/").content.decode())

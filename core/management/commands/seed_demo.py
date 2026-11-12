@@ -230,6 +230,9 @@ class Command(BaseCommand):
                                            incoterm="FOB", warehouse=main, created_by=admin)
         PurchaseOrderLine.objects.create(order=po3, product=P[2], quantity=D(1000), unit_price=D("27.50"))
         PurchaseOrderLine.objects.create(order=po3, product=P[0], quantity=D(500), unit_price=D("59.00"))
+        for ln, fs in zip(po3.lines.order_by("id"), (D("3.1200"), D("6.4500"))):  # First Sale (factory) cost USD
+            ln.fs_cost_usd = fs
+            ln.save()
         pur.send_po(po3)
         pur.confirm_po(po3, ship_date=today + datetime.timedelta(20), vendor_reference="PI-SUN-2350", by="lily")
         asn = Shipment.objects.create(vendor=sunrise, warehouse=main, mode="sea_fcl", status=Shipment.BOOKED,

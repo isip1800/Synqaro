@@ -149,8 +149,9 @@ def estimate_duty(shipment):
         raise ValidationError("Shipment already received; add duty as a landed cost instead.")
     duty = tariff = ZERO
     for line in shipment.lines.select_related("po_line__product", "po_line__order"):
-        duty += line.value_base * line.po_line.product.duty_rate / 100
-        tariff += line.value_base * line.po_line.product.tariff_rate / 100
+        value = line.dutiable_value  # First Sale value where entered
+        duty += value * line.po_line.product.duty_rate / 100
+        tariff += value * line.po_line.product.tariff_rate / 100
     LandedCost.objects.filter(shipment=shipment, cost_type__in=["duty", "tariff"],
                               description__in=["Estimated duty", "Estimated tariff"], capitalized=False).delete()
     result = None

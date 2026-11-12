@@ -173,7 +173,19 @@ pre.plain { white-space: pre-wrap; font: inherit; margin: 0; }
 .avail td.neg { color: var(--bad); }
 .avail td.zero { color: var(--muted); }
 .avail thead th { position: sticky; top: 0; z-index: 1; }
-.avail tbody td:nth-child(2) { position: sticky; left: 0; background: var(--surface); z-index: 1; }
+.avail .pin { position: sticky; background: var(--surface); z-index: 2; }
+.avail thead .pin { z-index: 3; background: var(--surface-2); }
+.avail tfoot .pin { background: var(--surface-2); }
+.avail .pin-img { left: 0; width: 76px; min-width: 76px; }
+.avail .pin-sku { left: 76px; box-shadow: 1px 0 0 var(--border); white-space: nowrap; }
+.thumb-lg { width: 60px; height: 60px; }
+.floor-mark { font-size: 10px; background: var(--info-bg); color: var(--info); border-radius: 4px; padding: 0 3px; }
 .legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 6px 16px; font-size: 12px; }
 .legend b { display: inline-block; min-width: 140px; }
 .table.lines select[name$="-warehouse"] { min-width: 170px; }
+.field ul, .field > div > div { list-style: none; padding: 0; margin: 4px 0 0; }
+.field ul li label, .field input[type=checkbox] + label { font-weight: 400; color: var(--text); }
+.field ul li label { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+.field-wide { grid-column: 1 / -1; }
+.multi-check > div { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.multi-check > div > div label { display: flex; gap: 6px; align-items: center; font-weight: 400; color: var(--text); font-size: 13px; }

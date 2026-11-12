@@ -118,6 +118,13 @@ class PurchaseOrder(NumberedMixin, TimeStamped):
     def total_base(self):
         return money(self.total * self.exchange_rate)
 
+    @property
+    def fs_totals(self):
+        lines = list(self.lines.all())
+        return {"usd": sum((ln.ext_fs_cost_usd for ln in lines), ZERO),
+                "rmb": sum((ln.ext_fs_cost_rmb for ln in lines), ZERO),
+                "any": any(ln.fs_cost_usd for ln in lines)}
+
     def refresh_receipt_status(self):
         if self.status in (self.CANCELLED, self.CLOSED, self.DRAFT):
             return
@@ -139,6 +146,10 @@ class PurchaseOrderLine(models.Model):
     description = models.CharField(max_length=255, blank=True)
     quantity = models.DecimalField(max_digits=14, decimal_places=3)
     unit_price = models.DecimalField(max_digits=14, decimal_places=4, help_text="In PO currency")
+    fs_cost_usd = models.DecimalField("FS cost USD", max_digits=14, decimal_places=4, default=ZERO,
+                                      help_text="First Sale (factory) unit cost in USD; used as the dutiable value")
+    fs_cost_rmb = models.DecimalField("FS cost RMB", max_digits=14, decimal_places=4, default=ZERO, editable=False,
+                                      help_text="FS cost USD converted at the RMB (CNY) exchange rate")
     qty_received = models.DecimalField(max_digits=14, decimal_places=3, default=ZERO, editable=False)
     qty_billed = models.DecimalField(max_digits=14, decimal_places=3, default=ZERO, editable=False)
 
@@ -151,7 +162,36 @@ class PurchaseOrderLine(models.Model):
     def save(self, *args, **kwargs):
         if not self.warehouse_id and self.order_id:
             self.warehouse_id = self.order.warehouse_id
+        self.fs_cost_rmb = self.compute_fs_rmb()
         super().save(*args, **kwargs)
+
+    def fs_rmb_rate(self):
+        """USD (base) per 1 RMB: the PO's own rate for RMB POs, otherwise the CNY rate on the order date."""
+        from core.models import ExchangeRate
+
+        if self.order.currency_id == "CNY":
+            return self.order.exchange_rate
+        return ExchangeRate.get_rate("CNY", self.order.order_date)
+
+    def compute_fs_rmb(self):
+        from core.utils import cost
+
+        if not self.fs_cost_usd:
+            return ZERO
+        rate = self.fs_rmb_rate()
+        return cost(self.fs_cost_usd / rate) if rate and rate != 1 else ZERO
+
+    @property
+    def ext_fs_cost_usd(self):
+        return money((self.quantity or ZERO) * (self.fs_cost_usd or ZERO))
+
+    @property
+    def ext_fs_cost_rmb(self):
+        return money((self.quantity or ZERO) * (self.fs_cost_rmb or ZERO))
+
+    def dutiable_unit_value(self):
+        """First Sale cost when entered, otherwise the PO price in base currency."""
+        return self.fs_cost_usd if self.fs_cost_usd else self.unit_cost_base
 
     @property
     def amount(self):
@@ -297,6 +337,13 @@ class ShipmentLine(models.Model):
     @property
     def value_base(self):
         return money(self.quantity * self.po_line.unit_price * self.po_line.order.exchange_rate)
+
+    @property
+    def dutiable_value(self):
+        """Customs value: First Sale cost when the PO line has one, otherwise the goods value."""
+        if self.po_line.fs_cost_usd:
+            return money(self.quantity * self.po_line.fs_cost_usd)
+        return self.value_base
 
 
 class LandedCost(models.Model):
