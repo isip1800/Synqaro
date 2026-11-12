@@ -222,6 +222,14 @@ class Shipment(NumberedMixin, TimeStamped):
     received_on = models.DateField(null=True, blank=True, editable=False)
     notes = models.TextField(blank=True)
     created_via_portal = models.BooleanField(default=False, editable=False)
+    approved = models.BooleanField(default=False, editable=False,
+                                   help_text="Buyer approved the booking (quantities / dates)")
+    approved_at = models.DateTimeField(null=True, blank=True, editable=False)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="+", editable=False)
+
+    BOOKED_STATUSES = (PLANNED, BOOKED)
+    IN_TRANSIT_STATUSES = (IN_TRANSIT, AT_PORT, CUSTOMS, CLEARED)
 
     class Meta:
         ordering = ["-eta", "-id"]

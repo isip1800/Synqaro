@@ -22,10 +22,22 @@
   <div class="kpi"><div class="label">List price</div><div class="value">{{ object.list_price|money }}</div><div class="note">Margin {{ object.margin_pct|pct }}</div></div>
 </div>
 <div class="tabs" id="tabs">
-  <a data-tab="general">General</a><a data-tab="details">Item details</a><a data-tab="packaging">Packaging</a>
+  <a data-tab="availability">Availability</a><a data-tab="general">General</a><a data-tab="details">Item details</a><a data-tab="packaging">Packaging</a>
   <a data-tab="warehouses">Warehouses</a><a data-tab="vendors">Vendors</a><a data-tab="xref">Cross-reference</a>
   <a data-tab="images">Images ({{ images|length }})</a><a data-tab="activity">Activity</a>
 </div>
+
+<section class="tabpanel" id="tab-availability">
+  <div class="card table-wrap"><h3>Quantity buckets</h3>
+  <table class="table compact avail">
+    <thead><tr><th>Group</th><th>Bucket</th><th class="num">All warehouses</th>{% for w in avail_whs %}<th class="num">{{ w.code }}</th>{% endfor %}<th>How it's calculated</th></tr></thead>
+    <tbody>{% for r in avail_rows %}<tr>
+      <td class="muted">{% ifchanged r.group %}{{ r.group }}{% endifchanged %}</td><td>{% if r.formula %}<strong>{{ r.label }}</strong>{% else %}{{ r.label }}{% endif %}</td>
+      <td class="num {% if r.formula %}formula{% endif %} {% if r.total < 0 %}neg{% elif not r.total %}zero{% endif %}">{% if r.drill and r.total %}<a href="{% url 'inventory:availability_detail' object.pk r.key %}">{{ r.total|qty }}</a>{% else %}{{ r.total|qty }}{% endif %}</td>
+      {% for v in r.per_wh %}<td class="num {% if r.formula %}formula{% endif %} {% if v < 0 %}neg{% elif not v %}zero{% endif %}">{{ v|qty }}</td>{% endfor %}
+      <td class="muted">{{ r.help }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
 
 <section class="tabpanel" id="tab-general">
   <div class="grid-2">
@@ -168,7 +180,7 @@
   }
   links.forEach(function (a) { a.addEventListener('click', function () { show(a.dataset.tab); history.replaceState(null, '', '#tab-' + a.dataset.tab); }); });
   var h = (location.hash || '').replace('#tab-', '');
-  show(document.getElementById('tab-' + h) ? h : 'general');
+  show(document.getElementById('tab-' + h) ? h : 'availability');
 })();
 </script>
 {% endblock %}

@@ -1,0 +1,164 @@
+from decimal import Decimal as D
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+
+from core.testing import TODAY, Fixture
+from inventory import availability
+from inventory.models import StockAdjustment, StockAdjustmentLine, Warehouse
+from inventory.services import post_adjustment
+from portal.models import VendorContact
+from purchasing import services as pur
+from purchasing.models import PurchaseOrder, PurchaseOrderLine, Shipment, ShipmentLine
+from sales import services as sal
+from sales.models import SalesOrder, SalesOrderLine
+
+
+class AvailabilityTests(TestCase):
+    """Scenario for product A (all quantities in units):
+
+    stock 100 opening + 10 received on a closed PO - 20 shipped           = 90 in stock
+    SO: quote 5, confirmed 30, partial 50 ordered / 20 shipped (30 left)  = 60 open orders
+    PO: draft 40; open PO 500 of which booked 100 (pending), booked 150 (approved),
+        in transit 120 (WH2), unbooked 130
+    """
+
+    def setUp(self):
+        self.f = Fixture()
+        f = self.f
+        self.wh2 = Warehouse.objects.create(code="WH2", name="Second")
+        adj = StockAdjustment.objects.create(warehouse=f.wh, date=TODAY, reason="opening")
+        StockAdjustmentLine.objects.create(adjustment=adj, product=f.a, quantity=D(100), unit_cost=D(10))
+        post_adjustment(adj)
+        closed = f.po([(f.a, 10, 50)])
+        pur.receive_po(closed, {closed.lines.first().pk: D(10)}, TODAY)  # -> status received
+        f.po([(f.a, 40, 50)], send=False)  # draft
+        self.open_po = f.po([(f.a, 500, 50)])
+        line = self.open_po.lines.first()
+        self.s_pending = self.ship(line, 100, Shipment.BOOKED, approved=False)
+        self.s_approved = self.ship(line, 150, Shipment.PLANNED, approved=True)
+        self.s_transit = self.ship(line, 120, Shipment.IN_TRANSIT, approved=True, warehouse=self.wh2)
+        self.order(5)  # quote
+        sal.confirm_order(self.order(30))
+        partial = self.order(50)
+        sal.confirm_order(partial)
+        sal.create_delivery(partial, {partial.lines.first().pk: D(20)}, TODAY)
+
+    def ship(self, po_line, qty, status, approved, warehouse=None):
+        s = Shipment.objects.create(vendor=self.f.vendor, warehouse=warehouse or self.f.wh, status=status,
+                                    approved=approved)
+        ShipmentLine.objects.create(shipment=s, po_line=po_line, quantity=D(qty))
+        return s
+
+    def order(self, qty):
+        so = SalesOrder.objects.create(customer=self.f.customer, order_date=TODAY, warehouse=self.f.wh)
+        SalesOrderLine.objects.create(order=so, product=self.f.a, quantity=D(qty), unit_price=D(20))
+        return so
+
+    def test_buckets_and_formulas(self):
+        b = availability.for_product(self.f.a)
+        expected = {
+            "on_hand": 90, "so_quote": 5, "so_open": 30, "so_partial": 30, "so_to_invoice": 20,
+            "po_new": 40, "po_open": 130, "po_closed": 10, "booked": 100, "booked_approved": 150, "in_transit": 120,
+            "open_orders": 60, "ats": 30, "in_transit_available": 120, "ats_in_transit": 150,
+            "available_to_sell": 90 + 120 + 150 + 100 + 130 - 60,
+        }
+        self.assertEqual({k: b[k] for k in expected}, {k: D(v) for k, v in expected.items()})
+
+    def test_in_transit_available_deducts_shortfall(self):
+        sal.confirm_order(self.order(100))  # open orders 160 vs 90 in stock -> short 70
+        b = availability.for_product(self.f.a)
+        self.assertEqual(b["ats"], D(-70))
+        self.assertEqual(b["in_transit_available"], D(120 - 70))
+        self.assertEqual(b["ats_in_transit"], D(90 + 120 - 160))
+
+    def test_partition_has_no_double_counting(self):
+        b = availability.for_product(self.f.a)
+        line = self.open_po.lines.first()
+        self.assertEqual(b["po_open"] + b["booked"] + b["booked_approved"] + b["in_transit"], line.qty_open)
+        # Receiving the in-transit shipment moves 120 from In Transit to In Stock
+        pur.receive_shipment(self.s_transit, TODAY)
+        b2 = availability.for_product(self.f.a)
+        self.assertEqual((b2["in_transit"], b2["on_hand"]), (D(0), D(210)))
+        self.assertEqual(b2["available_to_sell"], b["available_to_sell"])
+
+    def test_warehouse_filter(self):
+        wh1 = availability.for_product(self.f.a, self.f.wh.pk)
+        wh2 = availability.for_product(self.f.a, self.wh2.pk)
+        self.assertEqual((wh1["in_transit"], wh2["in_transit"]), (D(0), D(120)))
+        self.assertEqual((wh1["on_hand"], wh2["on_hand"]), (D(90), D(0)))
+        self.assertEqual(wh2["so_open"], D(0))
+
+    def test_approval_moves_between_buckets(self):
+        pur.approve_shipment(self.s_pending, self.f.user)
+        b = availability.for_product(self.f.a)
+        self.assertEqual((b["booked"], b["booked_approved"]), (D(0), D(250)))
+        pur.unapprove_shipment(self.s_pending)
+        self.assertEqual(availability.for_product(self.f.a)["booked"], D(100))
+
+    def test_drilldown_and_screens(self):
+        rows = availability.detail_rows(self.f.a, "so_partial")
+        self.assertEqual([r["qty"] for r in rows], [D(30)])
+        self.assertEqual(sum(r["qty"] for r in availability.detail_rows(self.f.a, "po_open")), D(130))
+        self.assertEqual(availability.detail_rows(self.f.a, "booked")[0]["number"], self.s_pending.number)
+        self.client.login(username="admin", password="pw-admin-123")
+        resp = self.client.get("/inventory/availability/")
+        self.assertContains(resp, "Available to Sell")
+        self.assertContains(resp, f"/inventory/availability/{self.f.a.pk}/booked/")
+        for url in [f"/inventory/availability/{self.f.a.pk}/in_transit/", f"/inventory/availability/?warehouse="
+                    f"{self.wh2.pk}", "/inventory/availability/?show=short", f"/products/items/{self.f.a.pk}/"]:
+            self.assertEqual(self.client.get(url).status_code, 200, url)
+        self.assertEqual(self.client.get(f"/inventory/availability/{self.f.a.pk}/ats/").status_code, 404)
+        resp = self.client.get("/inventory/availability/export.xlsx")
+        self.assertEqual(resp.status_code, 200)
+        import io
+        import zipfile
+
+        self.assertFalse([n for n in zipfile.ZipFile(io.BytesIO(resp.content)).namelist() if n.startswith("/")])
+
+
+class ShipmentApprovalTests(TestCase):
+    def setUp(self):
+        self.f = Fixture()
+        self.po = self.f.po([(self.f.a, 100, 10)])
+        user = get_user_model().objects.create_user("vend", password="pw-vendor-123")
+        VendorContact.objects.create(user=user, vendor=self.f.vendor)
+
+    def asn(self, qty, shipment=None):
+        line = self.po.lines.first()
+        data = {"status": "booked", "mode": "sea_fcl", "lines-TOTAL_FORMS": "1",
+                "lines-INITIAL_FORMS": "1" if shipment else "0", "lines-MIN_NUM_FORMS": "0",
+                "lines-MAX_NUM_FORMS": "1000", "lines-0-po_line": line.pk, "lines-0-quantity": str(qty)}
+        if shipment:
+            data["lines-0-id"] = shipment.lines.first().pk
+        url = f"/portal/shipments/{shipment.pk}/edit/" if shipment else "/portal/shipments/new/"
+        return self.client.post(url, data)
+
+    def test_staff_bookings_are_approved_portal_asn_is_pending(self):
+        s = pur.create_shipment_for_po(self.po, approved_by=self.f.user)
+        self.assertTrue(s.approved)
+        s.status = Shipment.CANCELLED
+        s.save()
+        self.client.login(username="vend", password="pw-vendor-123")
+        self.asn(60)
+        asn = Shipment.objects.get(created_via_portal=True)
+        self.assertFalse(asn.approved)
+        self.assertEqual(availability.for_product(self.f.a)["booked"], D(60))
+        pur.approve_shipment(asn, self.f.user)
+        # Vendor changes the quantity -> approval is reset
+        self.asn(80, asn)
+        asn.refresh_from_db()
+        self.assertFalse(asn.approved)
+        self.assertEqual(availability.for_product(self.f.a)["booked"], D(80))
+
+    def test_staff_approve_button(self):
+        s = Shipment.objects.create(vendor=self.f.vendor, warehouse=self.f.wh, created_via_portal=True)
+        ShipmentLine.objects.create(shipment=s, po_line=self.po.lines.first(), quantity=D(10))
+        self.client.login(username="admin", password="pw-admin-123")
+        self.client.post(f"/purchasing/shipments/{s.pk}/approve/")
+        s.refresh_from_db()
+        self.assertTrue(s.approved)
+        self.assertEqual(s.approved_by, self.f.user)
+
+
+__all__ = ["PurchaseOrder", "PurchaseOrderLine"]

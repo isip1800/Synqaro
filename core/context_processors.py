@@ -34,6 +34,7 @@ NAV = [
         ("Price Lists", "products:pricelist_list", "products/price-lists"),
     ]),
     ("Inventory", [
+        ("Availability (Qty Buckets)", "inventory:availability", "inventory/availability"),
         ("Stock on Hand", "inventory:stock", "inventory/stock"),
         ("Reorder Report", "inventory:reorder", "inventory/reorder"),
         ("Adjustments", "inventory:stockadjustment_list", "inventory/adjustments"),

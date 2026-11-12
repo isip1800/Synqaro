@@ -231,6 +231,12 @@ class Command(BaseCommand):
         PurchaseOrderLine.objects.create(order=po3, product=P[2], quantity=D(1000), unit_price=D("27.50"))
         PurchaseOrderLine.objects.create(order=po3, product=P[0], quantity=D(500), unit_price=D("59.00"))
         pur.send_po(po3)
+        pur.confirm_po(po3, ship_date=today + datetime.timedelta(20), vendor_reference="PI-SUN-2350", by="lily")
+        asn = Shipment.objects.create(vendor=sunrise, warehouse=main, mode="sea_fcl", status=Shipment.BOOKED,
+                                      incoterm="FOB", origin_port="Ningbo", destination_port="Long Beach",
+                                      etd=today + datetime.timedelta(21), eta=today + datetime.timedelta(42),
+                                      created_via_portal=True, notes="ASN submitted by vendor")
+        ShipmentLine.objects.create(shipment=asn, po_line=po3.lines.get(product=P[2]), quantity=D(600), cartons=13)
 
         # ---- Sales
         def order(customer, days, lines, rep=None, po=""):
