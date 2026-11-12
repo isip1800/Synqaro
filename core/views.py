@@ -76,7 +76,8 @@ def _dashboard(request):
 
 CompanyForm = model_form(Company, ["name", "legal_name", "tax_id", "address", "phone", "email", "base_currency",
                                    "default_sales_tax_rate", "default_payment_terms_days",
-                                   "default_warehouse"])
+                                   "default_warehouse", "upc_company_prefix", "upc_next_item_ref", "cbm_20", "cbm_40",
+                                   "cbm_40hq", "cbm_45"])
 
 
 @internal_required

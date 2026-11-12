@@ -1,12 +1,18 @@
 {% extends "base.html" %}{% load erp %}
 {% block content %}
+{% with img=object.primary_image %}
 <div class="page-head">
-  <div><h1>{{ object.sku }} — {{ object.name }}</h1><div class="sub">{{ object.category|default:"Uncategorized" }}{% if not object.is_active %} · inactive{% endif %}</div></div>
+  <div style="display:flex;gap:16px;align-items:center">
+    {% if img %}<a href="{% url 'products:image' img.pk %}" target="_blank"><img class="hero-img" src="{{ img.thumb_url }}" alt=""></a>{% endif %}
+    <div><h1>{{ object.sku }} — {{ object.name }}</h1>
+    <div class="sub">{% if object.item_class %}{{ object.item_class.full_code }} · {{ object.item_class.full_description }}{% else %}No item class{% endif %}{% if not object.is_active %} · inactive{% endif %}{% if object.barcode %} · UPC {{ object.barcode }}{% endif %}</div></div>
+  </div>
   <div class="actions">
-    <a class="btn" href="{% url 'products:vendorproduct_create' %}?product={{ object.pk }}">+ Vendor price</a>
-    <a class="btn" href="{% url 'products:product_update' object.pk %}">Edit</a>
+    <a class="btn" href="{% url 'products:product_create' %}?copy={{ object.pk }}">Copy as new</a>
+    <a class="btn btn-primary" href="{% url 'products:product_update' object.pk %}">Edit</a>
   </div>
 </div>
+{% endwith %}
 <div class="kpis">
   <div class="kpi"><div class="label">On hand</div><div class="value">{{ object.qty_on_hand|qty }}</div><div class="note">{{ object.uom|default:"" }}</div></div>
   <div class="kpi"><div class="label">Reserved</div><div class="value">{{ object.qty_reserved|qty }}</div><div class="note">Confirmed orders</div></div>
@@ -15,53 +21,154 @@
   <div class="kpi"><div class="label">Avg landed cost</div><div class="value">{{ object.avg_cost|unitcost }}</div><div class="note">Value {{ object.inventory_value|money }}</div></div>
   <div class="kpi"><div class="label">List price</div><div class="value">{{ object.list_price|money }}</div><div class="note">Margin {{ object.margin_pct|pct }}</div></div>
 </div>
-<div class="grid-2">
-  <div class="card">
-    <h3>Import & customs</h3>
-    <dl class="dl-grid">
-      <div><dt>HS code</dt><dd>{{ object.hs_code|default:"—" }}</dd></div>
-      <div><dt>Country of origin</dt><dd>{{ object.country_of_origin|default:"—" }}</dd></div>
-      <div><dt>Duty rate</dt><dd>{{ object.duty_rate|pct }}</dd></div>
-      <div><dt>Weight</dt><dd>{{ object.weight_kg|qty }} kg</dd></div>
-      <div><dt>Volume</dt><dd>{{ object.volume_cbm }} m³</dd></div>
-      <div><dt>Units / carton</dt><dd>{{ object.units_per_carton }}</dd></div>
-      <div><dt>Barcode</dt><dd>{{ object.barcode|default:"—" }}</dd></div>
+<div class="tabs" id="tabs">
+  <a data-tab="general">General</a><a data-tab="details">Item details</a><a data-tab="packaging">Packaging</a>
+  <a data-tab="warehouses">Warehouses</a><a data-tab="vendors">Vendors</a><a data-tab="xref">Cross-reference</a>
+  <a data-tab="images">Images ({{ images|length }})</a><a data-tab="activity">Activity</a>
+</div>
+
+<section class="tabpanel" id="tab-general">
+  <div class="grid-2">
+    <div class="card"><h3>General</h3><dl class="dl-grid">
+      <div><dt>Inventory ID</dt><dd>{{ object.sku }}</dd></div>
+      <div><dt>Status</dt><dd>{% if object.is_active %}Active{% else %}Inactive{% endif %}</dd></div>
+      <div><dt>UoM</dt><dd>{{ object.uom|default:"—" }}</dd></div>
+      <div><dt>UPC / barcode</dt><dd>{{ object.barcode|default:"—" }}</dd></div>
+    </dl>{% if object.description %}<p>{{ object.description|linebreaksbr }}</p>{% endif %}</div>
+    <div class="card"><h3>Price / cost & replenishment</h3><dl class="dl-grid">
+      <div><dt>List price</dt><dd>{{ object.list_price|money }}</dd></div>
       <div><dt>Standard cost</dt><dd>{{ object.standard_cost|unitcost }}</dd></div>
-    </dl>
-  </div>
-  <div class="card">
-    <h3>Replenishment</h3>
-    <dl class="dl-grid">
+      <div><dt>Monthly carrying cost</dt><dd>{{ object.monthly_carrying_cost|unitcost }}</dd></div>
       <div><dt>Preferred vendor</dt><dd>{% if object.preferred_vendor %}<a href="{{ object.preferred_vendor.get_absolute_url }}">{{ object.preferred_vendor }}</a>{% else %}—{% endif %}</dd></div>
-      <div><dt>Reorder point</dt><dd>{{ object.reorder_point|qty }}</dd></div>
-      <div><dt>Reorder qty</dt><dd>{{ object.reorder_qty|qty }}</dd></div>
+      <div><dt>Reorder point / qty</dt><dd>{{ object.reorder_point|qty }} / {{ object.reorder_qty|qty }}</dd></div>
       <div><dt>Lead time</dt><dd>{{ object.lead_time_days }} days</dd></div>
-    </dl>
-    {% if object.description %}<p>{{ object.description|linebreaksbr }}</p>{% endif %}
+    </dl></div>
   </div>
-</div>
-<div class="grid-2">
-  <div class="card table-wrap"><h3>Stock by warehouse</h3>
-    <table class="table compact"><thead><tr><th>Warehouse</th><th class="num">Qty</th></tr></thead><tbody>
-    {% for q in quants %}<tr><td>{{ q.warehouse }}</td><td class="num">{{ q.quantity|qty }}</td></tr>{% empty %}<tr><td colspan="2" class="empty">No stock.</td></tr>{% endfor %}
-    </tbody></table></div>
-  <div class="card table-wrap"><h3>Vendor prices</h3>
-    <table class="table compact"><thead><tr><th>Vendor</th><th>Vendor SKU</th><th class="num">Cost</th><th class="num">MOQ</th><th class="num">Lead</th></tr></thead><tbody>
-    {% for v in vendor_prices %}<tr><td><a href="{% url 'products:vendorproduct_update' v.pk %}">{{ v.vendor }}</a></td><td>{{ v.vendor_sku|default:"—" }}</td><td class="num">{{ v.unit_cost|unitcost }} {{ v.currency }}</td><td class="num">{{ v.moq|qty }}</td><td class="num">{{ v.lead_time_days }}d</td></tr>{% empty %}<tr><td colspan="5" class="empty">No vendor prices.</td></tr>{% endfor %}
-    </tbody></table></div>
-</div>
-<div class="grid-2">
-  <div class="card table-wrap"><h3>Open purchase orders</h3>
-    <table class="table compact"><thead><tr><th>PO</th><th>Vendor</th><th class="num">Open qty</th><th>Expected</th></tr></thead><tbody>
-    {% for l in open_po_lines %}<tr><td><a href="{{ l.order.get_absolute_url }}">{{ l.order.number }}</a></td><td>{{ l.order.vendor }}</td><td class="num">{{ l.qty_open|qty }}</td><td>{{ l.order.expected_date|date:"Y-m-d"|default:"—" }}</td></tr>{% empty %}<tr><td colspan="4" class="empty">None.</td></tr>{% endfor %}
-    </tbody></table></div>
   <div class="card table-wrap"><h3>Price list tiers</h3>
     <table class="table compact"><thead><tr><th>Price list</th><th class="num">Min qty</th><th class="num">Price</th></tr></thead><tbody>
     {% for t in price_tiers %}<tr><td><a href="{{ t.price_list.get_absolute_url }}">{{ t.price_list }}</a></td><td class="num">{{ t.min_qty|qty }}</td><td class="num">{{ t.price|money }}</td></tr>{% empty %}<tr><td colspan="3" class="empty">List price only.</td></tr>{% endfor %}
     </tbody></table></div>
-</div>
-<div class="card table-wrap"><h3>Recent stock moves</h3>
+</section>
+
+<section class="tabpanel" id="tab-details">
+  <div class="grid-2">
+    <div class="card"><h3>Item details</h3><dl class="dl-grid">
+      <div><dt>Brand</dt><dd>{{ object.brand|default:"—" }}</dd></div>
+      <div><dt>Package size</dt><dd>{{ object.package_size|default:"—" }}</dd></div>
+      <div><dt>Season</dt><dd>{{ object.season|default:"—" }}</dd></div>
+      <div><dt>Seasonal cutoff</dt><dd>{{ object.seasonal_cutoff|default:"—" }}</dd></div>
+      <div><dt>Gender</dt><dd>{{ object.gender|default:"—" }}</dd></div>
+      <div><dt>Size range</dt><dd>{{ object.size_range|default:"—" }}</dd></div>
+      <div><dt>Size breakdown</dt><dd>{{ object.size_breakdown|default:"—" }}</dd></div>
+      <div><dt>Item spec</dt><dd>{{ object.item_spec|default:"—" }}</dd></div>
+      <div><dt>Material</dt><dd>{{ object.material|default:"—" }}</dd></div>
+      <div><dt>Customer code</dt><dd>{{ object.customer_code|default:"—" }}</dd></div>
+      <div><dt>Label 1</dt><dd>{{ object.label1|default:"—" }}</dd></div>
+      <div><dt>Label 2</dt><dd>{{ object.label2|default:"—" }}</dd></div>
+      <div><dt>Multi PC set</dt><dd>{% if object.multi_pc_set %}Yes{% else %}No{% endif %}</dd></div>
+    </dl></div>
+    <div class="card"><h3>Item class & customs</h3><dl class="dl-grid">
+      {% with ic=object.item_class %}
+      <div><dt>Item class</dt><dd>{% if ic %}{{ ic.full_code }}{% else %}—{% endif %}</dd></div>
+      <div><dt>Tier 1 — Class</dt><dd>{% if ic %}{{ ic.parent.parent.description }}{% else %}—{% endif %}</dd></div>
+      <div><dt>Tier 2 — Subclass</dt><dd>{% if ic %}{{ ic.parent.description }}{% else %}—{% endif %}</dd></div>
+      <div><dt>Tier 3 — Product type</dt><dd>{% if ic %}{{ ic.description }}{% else %}—{% endif %}</dd></div>
+      {% endwith %}
+      <div><dt>HTS code</dt><dd>{{ object.hs_code|default:"—" }}</dd></div>
+      <div><dt>Duty rate</dt><dd>{{ object.duty_rate|pct }}</dd></div>
+      <div><dt>Tariff rate</dt><dd>{{ object.tariff_rate|pct }}</dd></div>
+      <div><dt>Country of origin</dt><dd>{{ object.country_of_origin|default:"—" }}</dd></div>
+    </dl>
+    <p class="muted" style="margin-top:12px">{% if object.hts_override %}HTS values entered manually (override on).{% elif hts_row %}From HTS table row <a href="{% url 'products:htscode_update' hts_row.pk %}">{{ hts_row }}</a>{% if not hts_row.hts_code %} — <span class="badge badge-partial">waiting on info</span>{% endif %}.{% else %}No HTS table row matches this item class + material + gender. <a href="{% url 'products:htscode_create' %}">Add one</a>.{% endif %}</p>
+    </div>
+  </div>
+</section>
+
+<section class="tabpanel" id="tab-packaging">
+  <div class="grid-2">
+    <div class="card"><h3>Packaging</h3><dl class="dl-grid">
+      <div><dt>Prepack qty</dt><dd>{{ object.prepack_qty }}</dd></div>
+      <div><dt>Carton qty</dt><dd>{{ object.carton_qty }}</dd></div>
+      <div><dt>Carton size</dt><dd>{% if object.carton_length %}{{ object.carton_length|floatformat:"-2" }} × {{ object.carton_width|floatformat:"-2" }} × {{ object.carton_height|floatformat:"-2" }} {{ object.dimension_unit }}{% else %}—{% endif %}</dd></div>
+      <div><dt>Carton CBM</dt><dd>{{ object.carton_cbm|unitcost }}</dd></div>
+      <div><dt>Carton CUFT</dt><dd>{{ object.carton_cuft|unitcost }}</dd></div>
+      <div><dt>Carton weight</dt><dd>{{ object.carton_weight_kg|qty }} kg</dd></div>
+      <div><dt>Unit weight</dt><dd>{{ object.weight_kg|qty }} kg</dd></div>
+      <div><dt>Unit volume</dt><dd>{{ object.volume_cbm }} m³</dd></div>
+    </dl></div>
+    <div class="card table-wrap"><h3>Container capacity</h3>
+      <table class="table compact"><thead><tr><th>Container</th><th class="num">CBM</th><th class="num">Cartons</th><th class="num">Qty</th></tr></thead><tbody>
+      {% for label, cbm, cartons, units in object.container_capacity %}<tr><td>{{ label }}</td><td class="num">{{ cbm|floatformat:0 }}</td><td class="num">{{ cartons|default_if_none:"—" }}</td><td class="num"><strong>{% if units is not None %}{{ units|qty }}{% else %}—{% endif %}</strong></td></tr>{% endfor %}
+      </tbody></table>
+      {% if not object.carton_cbm %}<p class="muted" style="padding:0 16px 12px">Enter carton size on the item to calculate.</p>{% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="tabpanel" id="tab-warehouses">
+  <div class="card table-wrap"><h3>Stock & settings by warehouse</h3>
+    <table class="table"><thead><tr><th>Warehouse</th><th>Bin</th><th class="num">On hand</th><th class="num">Reorder point</th><th class="num">Reorder qty</th><th class="num">Max qty</th><th>Default</th></tr></thead><tbody>
+    {% for w in warehouses %}<tr><td><a href="{{ w.warehouse.get_absolute_url }}">{{ w.warehouse }}</a></td><td>{{ w.settings.bin_location|default:"—" }}</td><td class="num">{{ w.qty|qty }}</td><td class="num">{% if w.settings %}{{ w.settings.reorder_point|qty }}{% else %}—{% endif %}</td><td class="num">{% if w.settings %}{{ w.settings.reorder_qty|qty }}{% else %}—{% endif %}</td><td class="num">{% if w.settings %}{{ w.settings.max_qty|qty }}{% else %}—{% endif %}</td><td>{% if w.settings.is_default %}✓{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="7" class="empty">Not stocked in any warehouse yet. Click Edit → Warehouses to assign one.</td></tr>{% endfor %}
+    </tbody></table></div>
+</section>
+
+<section class="tabpanel" id="tab-vendors">
+  <div class="card table-wrap"><h3>Vendor prices</h3>
+    <table class="table compact"><thead><tr><th>Vendor</th><th>Vendor SKU</th><th class="num">Cost</th><th class="num">MOQ</th><th class="num">Lead</th></tr></thead><tbody>
+    {% for v in vendor_prices %}<tr><td><a href="{{ v.vendor.get_absolute_url }}">{{ v.vendor }}</a></td><td>{{ v.vendor_sku|default:"—" }}</td><td class="num">{{ v.unit_cost|unitcost }} {{ v.currency }}</td><td class="num">{{ v.moq|qty }}</td><td class="num">{{ v.lead_time_days }}d</td></tr>{% empty %}<tr><td colspan="5" class="empty">No vendor prices.</td></tr>{% endfor %}
+    </tbody></table></div>
+  <div class="card table-wrap"><h3>Open purchase orders</h3>
+    <table class="table compact"><thead><tr><th>PO</th><th>Vendor</th><th class="num">Open qty</th><th>Expected</th></tr></thead><tbody>
+    {% for l in open_po_lines %}<tr><td><a href="{{ l.order.get_absolute_url }}">{{ l.order.number }}</a></td><td>{{ l.order.vendor }}</td><td class="num">{{ l.qty_open|qty }}</td><td>{{ l.order.expected_date|date:"Y-m-d"|default:"—" }}</td></tr>{% empty %}<tr><td colspan="4" class="empty">None.</td></tr>{% endfor %}
+    </tbody></table></div>
+</section>
+
+<section class="tabpanel" id="tab-xref">
+  <div class="card table-wrap">
+    <div class="section-title" style="padding:14px 16px 0"><h3>Cross-reference</h3>
+      <form method="post" action="{% url 'products:generate_upc' object.pk %}" class="inline">{% csrf_token %}
+        <span class="muted">Next UPC: <strong>{{ company.next_upc|default:"set a UPC prefix in Settings → Company" }}</strong></span>
+        {% if company.next_upc %}<button class="btn btn-primary btn-sm" onclick="return confirm('Assign the next UPC to {{ object.sku }}?')">Generate UPC</button>{% endif %}</form></div>
+    <table class="table"><thead><tr><th>Alternate type</th><th>Vendor / customer</th><th>Alternate ID</th><th>UoM</th><th>Description</th></tr></thead><tbody>
+    {% for x in cross_refs %}<tr><td>{{ x.get_alt_type_display }}</td><td>{{ x.vendor|default:"" }}{{ x.customer|default:"" }}</td><td><strong>{{ x.alternate_id }}</strong></td><td>{{ x.uom|default:"—" }}</td><td>{{ x.description }}</td></tr>
+    {% empty %}<tr><td colspan="5" class="empty">No cross-references. Generate a UPC or add vendor / customer part numbers via Edit.</td></tr>{% endfor %}
+    </tbody></table></div>
+</section>
+
+<section class="tabpanel" id="tab-images">
+  <div class="card">
+    <form method="post" enctype="multipart/form-data" action="{% url 'products:image_upload' object.pk %}" class="inline-form">{% csrf_token %}
+      <label class="field"><span>Add images (JPG, PNG, WEBP… up to 10 MB each)</span><input type="file" name="images" accept="image/*" multiple required></label>
+      <label class="field checkbox"><span>Make first one the main image</span><input type="checkbox" name="primary" value="1"></label>
+      <button class="btn btn-primary">Upload</button>
+    </form>
+  </div>
+  <div class="gallery">
+  {% for im in images %}<figure class="{% if im.is_primary %}primary{% endif %}"><a href="{% url 'products:image' im.pk %}" target="_blank"><img src="{{ im.thumb_url }}" alt="" loading="lazy"></a>
+    <figcaption>{% if im.is_primary %}<span class="badge badge-posted">Main</span>{% else %}<form method="post" action="{% url 'products:image_primary' im.pk %}" class="inline">{% csrf_token %}<button class="btn btn-sm">Make main</button></form>{% endif %}
+    <form method="post" action="{% url 'products:image_delete' im.pk %}" class="inline" onsubmit="return confirm('Delete this image?')">{% csrf_token %}<button class="btn btn-sm btn-danger">Delete</button></form>
+    <span class="muted">{{ im.width }}×{{ im.height }}</span></figcaption></figure>
+  {% empty %}<p class="muted">No images yet.</p>{% endfor %}
+  </div>
+</section>
+
+<section class="tabpanel" id="tab-activity">
+  <div class="card table-wrap"><h3>Recent stock moves</h3>
   <table class="table compact"><thead><tr><th>Date</th><th>Type</th><th>Warehouse</th><th>Reference</th><th class="num">Qty</th><th class="num">Unit cost</th></tr></thead><tbody>
   {% for m in moves %}<tr><td>{{ m.date|date:"Y-m-d" }}</td><td>{{ m.get_move_type_display }}</td><td>{{ m.warehouse.code }}</td><td>{{ m.reference }}</td><td class="num">{{ m.quantity|qty }}</td><td class="num">{{ m.unit_cost|unitcost }}</td></tr>{% empty %}<tr><td colspan="6" class="empty">No movements.</td></tr>{% endfor %}
   </tbody></table></div>
+</section>
+<script>
+(function () {
+  var links = document.querySelectorAll('#tabs a');
+  function show(name) {
+    links.forEach(function (a) { a.classList.toggle('active', a.dataset.tab === name); });
+    document.querySelectorAll('.tabpanel').forEach(function (p) { p.classList.toggle('active', p.id === 'tab-' + name); });
+  }
+  links.forEach(function (a) { a.addEventListener('click', function () { show(a.dataset.tab); history.replaceState(null, '', '#tab-' + a.dataset.tab); }); });
+  var h = (location.hash || '').replace('#tab-', '');
+  show(document.getElementById('tab-' + h) ? h : 'general');
+})();
+</script>
 {% endblock %}

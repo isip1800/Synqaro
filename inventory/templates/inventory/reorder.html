@@ -1,15 +1,16 @@
 {% extends "base.html" %}{% load erp %}
 {% block content %}
 <div class="page-head"><h1>{{ title }}</h1></div>
-<p class="muted">Products whose projected stock (on hand + on order − reserved) is at or below the reorder point. Suggested qty is the larger of the reorder qty and the shortfall.</p>
+<p class="muted">Projected stock (on hand + on order − reserved) at or below the reorder point. Items with warehouse settings are checked per warehouse; others company-wide. Suggested qty is the larger of the reorder qty and the shortfall (capped at max qty when set).</p>
+<form class="toolbar" method="get"><select name="warehouse" onchange="this.form.submit()"><option value="">All warehouses</option>{% for w in warehouses %}<option value="{{ w.pk }}" {% if wh_filter == w.pk|stringformat:"s" %}selected{% endif %}>{{ w.code }}</option>{% endfor %}</select></form>
 <div class="card table-wrap"><table class="table">
-<thead><tr><th>Product</th><th>Preferred vendor</th><th class="num">On hand</th><th class="num">Reserved</th><th class="num">On order</th><th class="num">Projected</th><th class="num">Reorder pt</th><th class="num">Suggested</th><th class="num">Lead time</th><th></th></tr></thead>
+<thead><tr><th>Product</th><th>Warehouse</th><th>Preferred vendor</th><th class="num">On hand</th><th class="num">Reserved</th><th class="num">On order</th><th class="num">Projected</th><th class="num">Reorder pt</th><th class="num">Suggested</th><th></th></tr></thead>
 <tbody>{% for r in rows %}<tr>
 <td><a href="{{ r.product.get_absolute_url }}">{{ r.product }}</a></td>
+<td>{% if r.warehouse %}{{ r.warehouse.code }}{% else %}<span class="muted">all</span>{% endif %}</td>
 <td>{{ r.product.preferred_vendor|default:"—" }}</td>
 <td class="num">{{ r.on_hand|qty }}</td><td class="num">{{ r.reserved|qty }}</td><td class="num">{{ r.on_order|qty }}</td>
-<td class="num">{{ r.projected|qty }}</td><td class="num">{{ r.product.reorder_point|qty }}</td><td class="num"><strong>{{ r.suggest|qty }}</strong></td>
-<td class="num">{{ r.product.lead_time_days }}d</td>
-<td>{% if r.product.preferred_vendor %}<a class="btn btn-sm" href="{% url 'purchasing:purchaseorder_create' %}?vendor={{ r.product.preferred_vendor.pk }}">Create PO</a>{% endif %}</td>
+<td class="num">{{ r.projected|qty }}</td><td class="num">{{ r.reorder_point|qty }}</td><td class="num"><strong>{{ r.suggest|qty }}</strong></td>
+<td>{% if r.product.preferred_vendor %}<a class="btn btn-sm" href="{% url 'purchasing:purchaseorder_create' %}?vendor={{ r.product.preferred_vendor.pk }}{% if r.warehouse %}&warehouse={{ r.warehouse.pk }}{% endif %}">Create PO</a>{% endif %}</td>
 </tr>{% empty %}<tr><td colspan="10" class="empty">Nothing needs reordering.</td></tr>{% endfor %}</tbody></table></div>
 {% endblock %}

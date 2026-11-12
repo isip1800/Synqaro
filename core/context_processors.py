@@ -27,8 +27,10 @@ NAV = [
         ("Financial Reports", "accounting:reports", "accounting/reports"),
     ]),
     ("Products", [
-        ("Products", "products:product_list", "products/items"),
-        ("Categories", "products:category_list", "products/categories"),
+        ("Stock Items", "products:product_list", "products/items"),
+        ("Item Classes", "products:itemclass_list", "products/item-classes"),
+        ("HTS Codes", "products:htscode_list", "products/hts-codes"),
+        ("Product Setup", "products:setup", "products/setup"),
         ("Price Lists", "products:pricelist_list", "products/price-lists"),
     ]),
     ("Inventory", [

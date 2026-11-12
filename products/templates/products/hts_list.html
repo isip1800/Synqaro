@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><div><h1>HTS Codes</h1><div class="sub">Items pick up HTS code, duty and tariff from the row matching their item class + material + gender (a blank gender row applies to any gender).</div></div>
+<div class="actions">
+  <a class="btn" href="{% url 'products:htscode_export' %}?{{ query }}">⬇ Export Excel</a>
+  <form method="post" enctype="multipart/form-data" action="{% url 'products:htscode_import' %}" class="inline-form">{% csrf_token %}
+    <input type="file" name="file" accept=".xlsx" required style="width:auto"><button class="btn">⬆ Import Excel</button></form>
+  <a class="btn btn-primary" href="{% url 'products:htscode_create' %}">+ New row</a>
+</div></div>
+<div class="tabs"><a href="?tab=all" class="{% if tab != 'waiting' %}active{% endif %}">All records ({{ total }})</a><a href="?tab=waiting" class="{% if tab == 'waiting' %}active{% endif %}">Waiting on info ({{ waiting }})</a></div>
+<form class="toolbar" method="get"><input type="hidden" name="tab" value="{{ tab }}"><input type="search" name="q" value="{{ q }}" placeholder="Item class, material, HTS…"><button class="btn">Search</button></form>
+<div class="card table-wrap"><table class="table compact"><thead><tr><th>Item class</th><th>Material</th><th>Gender</th><th>HTS code</th><th class="num">Duty rate</th><th class="num">Tariff</th><th>Notes</th><th></th></tr></thead><tbody>
+{% for h in object_list %}<tr><td><a href="{% url 'products:htscode_update' h.pk %}">{{ h.item_class.full_code }}</a></td><td>{{ h.material.code }}</td><td>{{ h.gender.code|default:"any" }}</td><td>{% if h.hts_code %}{{ h.hts_code }}{% else %}<span class="badge badge-partial">waiting on info</span>{% endif %}</td><td class="num">{{ h.duty_rate|floatformat:2 }}</td><td class="num">{{ h.tariff_rate|floatformat:2 }}</td><td class="muted">{{ h.notes }}</td>
+<td><form method="post" action="{% url 'products:htscode_delete' h.pk %}" class="inline" onsubmit="return confirm('Delete this HTS row?')">{% csrf_token %}<button class="btn btn-sm btn-danger">✕</button></form></td></tr>
+{% empty %}<tr><td colspan="8" class="empty">No rows.</td></tr>{% endfor %}
+</tbody></table></div>
+{% include "core/_pagination.html" %}
+{% endblock %}

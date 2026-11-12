@@ -72,15 +72,38 @@ Every document posts automatically to the general ledger:
 - **Reports:** Profit & Loss (with COGS and gross profit), Balance Sheet (with current earnings), Trial Balance, AR/AP aging, and inventory valuation.
 
 ### Product Management
-- SKU, barcode, category tree, unit of measure.
-- **Customs data:** HS code, country of origin, duty rate, weight, volume (CBM), units per carton.
-- List price, standard cost and **moving-average landed cost**, plus a margin indicator.
-- Vendor price catalogue (vendor SKU, cost, currency, MOQ, lead time) and preferred vendor.
+- **Stock items**, each with these tabs:
+  - General, Item details, Packaging, Warehouses, Vendors, Cross-reference, Images, Activity.
+  - "Copy as new" duplicates an item.
+- **Three-tier item classes:** Tier 1 Class → Tier 2 Subclass → Tier 3 Product Type, e.g. `INT -UNDERWEAR -10PKPANTIE` = Basics / Underwear / 10 Pack Panties.
+- **Item details:**
+  - Fields: Brand, Package Size, Season, Seasonal Cutoff, Gender, Size Range, Size Breakdown, Item Spec, Material, Customer Code, Label 1/2, Multi PC Set, plus monthly carrying cost.
+  - Each list has its own menu under **Products → Product Setup**.
+- **HTS code table:**
+  - Each row holds an HTS code, duty rate and tariff rate, keyed by item class + material + gender. A row with a blank gender applies to any gender.
+  - Items pick up the matching row automatically, and updates to the table flow to items. A per-item override is available.
+  - Includes a "Waiting on info" tab and Excel import/export.
+- **Packaging & containers:**
+  - Prepack qty, carton qty, carton dimensions (inches or cm) → carton CBM and CUFT.
+  - Qty per 20' / 40' / 40'HQ / 45' container, full cartons only. Defaults are 27 / 58 / 67 / 76 CBM, editable in **Settings → Company**.
+  - There's a live calculator on the item form, and per-unit volume and weight are derived for landed-cost allocation.
+- **UPC:**
+  - A GS1 company prefix and next item reference are set in **Settings → Company**.
+  - **Generate UPC** assigns the next number with its check digit and skips numbers already in use.
+  - Typed UPCs are validated, and the check digit is added when you enter 11 digits.
+- **Cross-references:** barcodes, vendor part numbers and customer part numbers.
+- **Images:**
+  - Multiple photos per item, with a main image shown as the thumbnail on the item list.
+  - Stored in the database, so they survive redeploys.
+  - **Export to Excel** puts each item's picture *inside* its cell (Excel 365 / 2021+ "Place in Cell" pictures).
+- **Per-warehouse settings:** bin location, reorder point, reorder qty and max qty per warehouse.
+- **Pricing:** list price, standard cost and moving-average landed cost. Vendor prices (vendor SKU, cost, currency, MOQ, lead time) and quantity-tier price lists.
 
 ### Inventory Management
 - Multi-warehouse perpetual inventory, with a full stock-move ledger.
 - Stock on hand & valuation by warehouse and category.
 - **Reorder report:** projected stock (on hand + on order − reserved) vs reorder point, with suggested quantities and a "Create PO" shortcut.
+  - Items with warehouse settings are checked per warehouse; other items are checked company-wide.
 - Stock adjustments (cycle count, damage, shrinkage, opening balances) and inter-warehouse transfers.
 - Overselling is prevented: deliveries cannot exceed stock in the shipping warehouse.
 

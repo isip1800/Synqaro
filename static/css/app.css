@@ -146,3 +146,22 @@ pre.plain { white-space: pre-wrap; font: inherit; margin: 0; }
   .content { padding: 0; }
   .card { border: 0; box-shadow: none; }
 }
+/* Products */
+.thumb { width: 48px; height: 48px; border-radius: 6px; object-fit: cover; background: var(--surface-2); display: block; border: 1px solid var(--border); }
+.thumb.empty { display: grid; place-items: center; color: var(--muted); font-size: 18px; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.gallery figure { margin: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.gallery figure.primary { outline: 2px solid var(--primary); }
+.gallery img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #fff; display: block; }
+.gallery figcaption { padding: 6px 8px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12px; }
+.hero-img { width: 140px; height: 140px; object-fit: contain; background: #fff; border-radius: 8px; border: 1px solid var(--border); }
+.tabpanel { display: none; }
+.tabpanel.active { display: block; }
+.tabs a { cursor: pointer; }
+.field-with-link { display: flex; gap: 6px; align-items: center; }
+.field-with-link select { flex: 1; }
+.calc { background: var(--surface-2); border-radius: 8px; padding: 12px; }
+.calc table td, .calc table th { padding: 4px 10px; }
+.tree-1 { font-weight: 700; }
+.tree-2 td:first-child { padding-left: 28px; }
+.tree-3 td:first-child { padding-left: 52px; }

@@ -91,12 +91,35 @@ class Company(models.Model):
     default_payment_terms_days = models.PositiveIntegerField(default=30)
     default_warehouse = models.ForeignKey("inventory.Warehouse", null=True, blank=True, on_delete=models.SET_NULL,
                                           related_name="+", help_text="Pre-selected on new orders and shipments")
+    # UPC generation
+    upc_company_prefix = models.CharField("UPC company prefix", max_length=10, blank=True,
+                                          help_text="Your GS1 company prefix, 6–10 digits (e.g. 676191)")
+    upc_next_item_ref = models.PositiveIntegerField("Next UPC item reference", default=1,
+                                                    help_text="Item reference used for the next generated UPC")
+    # Container capacities used for 'qty per container'
+    cbm_20 = models.DecimalField("20' container CBM", max_digits=6, decimal_places=2, default=Decimal("27"))
+    cbm_40 = models.DecimalField("40' container CBM", max_digits=6, decimal_places=2, default=Decimal("58"))
+    cbm_40hq = models.DecimalField("40' HQ container CBM", max_digits=6, decimal_places=2, default=Decimal("67"))
+    cbm_45 = models.DecimalField("45' container CBM", max_digits=6, decimal_places=2, default=Decimal("76"))
 
     class Meta:
         verbose_name_plural = "company"
 
     def __str__(self):
         return self.name
+
+    @property
+    def containers(self):
+        return [("20'", self.cbm_20), ("40'", self.cbm_40), ("40' HQ", self.cbm_40hq), ("45'", self.cbm_45)]
+
+    @property
+    def next_upc(self):
+        from products.upc import build
+
+        try:
+            return build(self.upc_company_prefix, self.upc_next_item_ref)
+        except ValueError:
+            return None
 
     @classmethod
     def get(cls):

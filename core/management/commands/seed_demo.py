@@ -14,7 +14,8 @@ from core.models import Company, ExchangeRate
 from inventory.models import StockAdjustment, StockAdjustmentLine, Warehouse
 from inventory.services import post_adjustment
 from portal.models import VendorContact
-from products.models import Category, PriceList, PriceListItem, Product, UnitOfMeasure, VendorProduct
+from products.models import PriceList, PriceListItem, Product, UnitOfMeasure, VendorProduct
+from products.sample_setup import load_sample_setup
 from purchasing import services as pur
 from purchasing.models import LandedCost, PurchaseOrder, PurchaseOrderLine, Shipment, ShipmentLine, Vendor
 from sales import services as sal
@@ -66,10 +67,10 @@ class Command(BaseCommand):
         Warehouse.objects.create(code="DAL", name="Dallas Satellite", city="Dallas", state="TX", country="USA")
         ea = UnitOfMeasure.objects.create(code="EA", name="Each")
         UnitOfMeasure.objects.create(code="CTN", name="Carton")
-        home = Category.objects.create(name="Home & Kitchen")
-        cook = Category.objects.create(name="Cookware", parent=home)
-        light = Category.objects.create(name="Lighting")
-        tools = Category.objects.create(name="Hand Tools")
+        company.upc_company_prefix = "676191"
+        company.upc_next_item_ref = 1000
+        company.save()
+        home = cook = light = tools = None
 
         sunrise = Vendor.objects.create(code="V-SUN", name="Sunrise Manufacturing Co., Ltd.", country="China",
                                         city="Ningbo", currency_id="CNY", payment_terms_days=30,
@@ -98,11 +99,11 @@ class Command(BaseCommand):
             ("TL-3001", "Ratchet Screwdriver Set 24pc", tools, "8205.40.0000", "6.2", "0.90", "0.0040", "19.90",
              "42.00", sunrise, 80, 300),
         ]:
-            p = Product.objects.create(sku=sku, name=name, category=cat, uom=ea, hs_code=hs, duty_rate=D(duty),
+            p = Product.objects.create(sku=sku, name=name, uom=ea, hs_code=hs, duty_rate=D(duty),
                                        weight_kg=D(w), volume_cbm=D(v), list_price=D(price), standard_cost=D(cost),
                                        preferred_vendor=vend, reorder_point=D(rp), reorder_qty=D(rq),
                                        lead_time_days=60 if vend == sunrise else 30, country_of_origin=vend.country,
-                                       units_per_carton=12)
+                                       carton_qty=12)
             VendorProduct.objects.create(vendor=vend, product=p, vendor_sku=f"{vend.code[2:]}-{sku}",
                                          unit_cost=D(cost), currency=vend.currency, moq=D(rq),
                                          lead_time_days=p.lead_time_days)
@@ -135,6 +136,10 @@ class Command(BaseCommand):
             Customer.objects.create(code="C-HW", name="Hardware Hub Inc.", city="Dallas", state="TX", country="USA",
                                     payment_terms_days=15, sales_rep=james, tax_exempt=True),
         ]
+
+        load_sample_setup()  # item classes, item-detail lookups, HTS table; fills in the products above
+        P.append(self.apparel_item(ea, sunrise))
+        self.demo_images(P)
 
         # Opening stock and owner's capital
         adj = StockAdjustment.objects.create(warehouse=main, date=ago(100), reason="opening",
@@ -275,3 +280,45 @@ class Command(BaseCommand):
             acc.post_journal(ago(10 + n), memo, [{"account": Account.objects.get(code=acct_code), "debit": D(amt)},
                                                  {"account": acc.acct("CASH"), "credit": D(amt)}],
                              "manual", "", admin)
+
+    def apparel_item(self, uom, vendor):
+        from products.models import ItemClass, LookupValue
+
+        lv = lambda kind, code: LookupValue.objects.get(kind=kind, code=code)  # noqa: E731
+        ic = ItemClass.objects.get(code="10PKPANTIE", parent__code="UNDERWEAR")
+        p = Product.objects.create(
+            sku="14241190", name="10 Pack Panties - Hearts", uom=uom, item_class=ic, brand=lv("brand", "KENSIEGIRL"),
+            package_size=lv("package_size", "10"), season=lv("season", "Q421"), gender=lv("gender", "Girl"),
+            size_range=lv("size_range", "GIRLS-4-12"), size_breakdown=lv("size_breakdown", "1-1-2-1-1"),
+            material=lv("material", "INT100COT"), customer_code=lv("customer_code", "WINNERS"),
+            country_of_origin="China", prepack_qty=6, carton_qty=120, carton_cbm=D("0.1229"),
+            carton_weight_kg=D("14.4"), list_price=D("9.50"), standard_cost=D("22.00"), preferred_vendor=vendor,
+            monthly_carrying_cost=D("0.0127"), reorder_point=D(600), reorder_qty=D(2400), lead_time_days=75,
+        )
+        VendorProduct.objects.create(vendor=vendor, product=p, vendor_sku="SUN-KG10HRT", unit_cost=D("22.00"),
+                                     currency=vendor.currency, moq=D(1200), lead_time_days=75)
+        from products.services import generate_upc
+
+        generate_upc(p)
+        return p
+
+    def demo_images(self, products):
+        """Simple generated product photos so thumbnails and the Excel export have something to show."""
+        import io
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image, ImageDraw
+
+        from products.services import add_image
+
+        palette = ["#2f6fdb", "#d9534f", "#2a9d8f", "#e9a23b", "#7b61ff", "#3d8b37", "#c2185b"]
+        for i, p in enumerate(products):
+            img = Image.new("RGB", (600, 600), palette[i % len(palette)])
+            draw = ImageDraw.Draw(img)
+            draw.rounded_rectangle((60, 60, 540, 540), radius=40, outline="white", width=10)
+            draw.text((90, 250), p.sku, fill="white", font_size=64)
+            draw.text((90, 340), p.name[:26], fill="white", font_size=30)
+            buf = io.BytesIO()
+            img.save(buf, "PNG")
+            add_image(p, SimpleUploadedFile(f"{p.sku}.png", buf.getvalue(), content_type="image/png"))
+
