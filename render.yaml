@@ -2,7 +2,7 @@
 # Dashboard -> New -> Blueprint -> pick this repository.
 databases:
   - name: synqaro-db
-    plan: free
+    plan: basic-256mb        # paid Basic plan (keeps data; free databases expire)
     databaseName: synqaro
     user: synqaro
 
@@ -13,7 +13,7 @@ services:
     plan: free
     buildCommand: ./build.sh
     startCommand: ./start.sh
-    healthCheckPath: /login/
+    healthCheckPath: /healthz
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.4
