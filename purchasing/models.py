@@ -92,8 +92,8 @@ class PurchaseOrder(NumberedMixin, TimeStamped):
     exchange_rate = models.DecimalField(max_digits=18, decimal_places=6, default=Decimal("1"),
                                         help_text="Base currency per 1 unit of PO currency")
     incoterm = models.CharField(max_length=3, choices=INCOTERMS, blank=True)
-    warehouse = models.ForeignKey("inventory.Warehouse", on_delete=models.PROTECT,
-                                  help_text="Destination warehouse")
+    warehouse = models.ForeignKey("inventory.Warehouse", on_delete=models.PROTECT, verbose_name="Default warehouse",
+                                  help_text="Pre-fills the warehouse on new lines; each line can go to its own warehouse")
     payment_terms = models.CharField(max_length=100, blank=True, help_text="e.g. 30% deposit, 70% against B/L")
     notes = models.TextField(blank=True)
     status = models.CharField(max_length=12, choices=STATUSES, default=DRAFT, editable=False)
@@ -134,6 +134,8 @@ class PurchaseOrder(NumberedMixin, TimeStamped):
 class PurchaseOrderLine(models.Model):
     order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name="lines")
     product = models.ForeignKey("products.Product", on_delete=models.PROTECT, related_name="po_lines")
+    warehouse = models.ForeignKey("inventory.Warehouse", on_delete=models.PROTECT, related_name="po_lines",
+                                  help_text="Warehouse this line is received into")
     description = models.CharField(max_length=255, blank=True)
     quantity = models.DecimalField(max_digits=14, decimal_places=3)
     unit_price = models.DecimalField(max_digits=14, decimal_places=4, help_text="In PO currency")
@@ -144,7 +146,12 @@ class PurchaseOrderLine(models.Model):
         ordering = ["id"]
 
     def __str__(self):
-        return f"{self.order.number} / {self.product.sku}"
+        return f"{self.order.number} / {self.product.sku}" + (f" @ {self.warehouse.code}" if self.warehouse_id else "")
+
+    def save(self, *args, **kwargs):
+        if not self.warehouse_id and self.order_id:
+            self.warehouse_id = self.order.warehouse_id
+        super().save(*args, **kwargs)
 
     @property
     def amount(self):
@@ -215,7 +222,8 @@ class Shipment(NumberedMixin, TimeStamped):
     actual_arrival = models.DateField(null=True, blank=True)
     customs_entry_number = models.CharField(max_length=60, blank=True)
     customs_cleared_on = models.DateField(null=True, blank=True)
-    warehouse = models.ForeignKey("inventory.Warehouse", on_delete=models.PROTECT)
+    warehouse = models.ForeignKey("inventory.Warehouse", on_delete=models.PROTECT, verbose_name="Main destination",
+                                  help_text="Goods are received into each PO line's own warehouse")
     allocation_method = models.CharField(max_length=10, choices=ALLOCATIONS, default=ALLOC_VALUE,
                                          help_text="How landed costs are spread over the goods")
     status = models.CharField(max_length=12, choices=STATUSES, default=PLANNED)
@@ -355,7 +363,8 @@ class GoodsReceipt(NumberedMixin):
     purchase_order = models.ForeignKey(PurchaseOrder, null=True, blank=True, on_delete=models.PROTECT,
                                        related_name="receipts")
     shipment = models.ForeignKey(Shipment, null=True, blank=True, on_delete=models.PROTECT, related_name="receipts")
-    warehouse = models.ForeignKey("inventory.Warehouse", on_delete=models.PROTECT)
+    warehouse = models.ForeignKey("inventory.Warehouse", null=True, blank=True, on_delete=models.PROTECT,
+                                  help_text="Blank when lines went to several warehouses")
     date = models.DateField()
     notes = models.TextField(blank=True)
     journal_entry = models.ForeignKey("accounting.JournalEntry", null=True, blank=True, on_delete=models.SET_NULL)
@@ -377,6 +386,7 @@ class GoodsReceiptLine(models.Model):
     receipt = models.ForeignKey(GoodsReceipt, on_delete=models.CASCADE, related_name="lines")
     po_line = models.ForeignKey(PurchaseOrderLine, on_delete=models.PROTECT, related_name="receipt_lines")
     product = models.ForeignKey("products.Product", on_delete=models.PROTECT)
+    warehouse = models.ForeignKey("inventory.Warehouse", on_delete=models.PROTECT, related_name="+")
     quantity = models.DecimalField(max_digits=14, decimal_places=3)
     unit_goods_cost = models.DecimalField(max_digits=14, decimal_places=4)
     unit_landed_cost = models.DecimalField(max_digits=14, decimal_places=4, default=ZERO)

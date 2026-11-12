@@ -2,8 +2,8 @@
 {% block content %}
 <div class="page-head"><div><h1>{{ title }}</h1><div class="sub"><a href="{{ product.get_absolute_url }}#tab-availability">{{ product }}</a> · {{ bucket.3 }}{% if warehouse %} · {{ warehouse }}{% endif %}</div></div>
 <div class="actions"><a class="btn" href="{% url 'inventory:availability' %}{% if warehouse %}?warehouse={{ warehouse.pk }}{% endif %}">← Availability</a></div></div>
-<div class="card table-wrap"><table class="table"><thead><tr><th>Document</th><th>Customer / vendor</th><th>Date</th><th>Status</th><th class="num">Qty</th></tr></thead><tbody>
-{% for r in rows %}<tr><td><a href="{{ r.url }}">{{ r.number }}</a></td><td>{{ r.party }}</td><td>{{ r.date|date:"Y-m-d"|default:"—" }}</td><td>{{ r.status }}</td><td class="num">{{ r.qty|qty }}</td></tr>
-{% empty %}<tr><td colspan="5" class="empty">Nothing in this bucket.</td></tr>{% endfor %}
-</tbody><tfoot><tr><td colspan="4">Total</td><td class="num">{{ total|qty }}</td></tr></tfoot></table></div>
+<div class="card table-wrap"><table class="table"><thead><tr><th>Document</th><th>Customer / vendor</th><th>Warehouse</th><th>Date</th><th>Status</th><th class="num">Qty</th></tr></thead><tbody>
+{% for r in rows %}<tr><td><a href="{{ r.url }}">{{ r.number }}</a></td><td>{{ r.party }}</td><td>{{ r.warehouse }}</td><td>{{ r.date|date:"Y-m-d"|default:"—" }}</td><td>{{ r.status }}</td><td class="num">{{ r.qty|qty }}</td></tr>
+{% empty %}<tr><td colspan="6" class="empty">Nothing in this bucket.</td></tr>{% endfor %}
+</tbody><tfoot><tr><td colspan="5">Total</td><td class="num">{{ total|qty }}</td></tr></tfoot></table></div>
 {% endblock %}

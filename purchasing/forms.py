@@ -1,14 +1,15 @@
 from django import forms
 
-from core.forms import StyledModelForm, line_formset, model_form
+from core.forms import LineWarehouseForm, StyledModelForm, line_formset, model_form
 
 from .models import LandedCost, PurchaseOrder, PurchaseOrderLine, Shipment, ShipmentDocument, ShipmentLine
 
 PO_FIELDS = ["vendor", "order_date", "expected_date", "currency", "exchange_rate", "incoterm", "warehouse",
              "payment_terms", "vendor_reference", "notes"]
 PurchaseOrderForm = model_form(PurchaseOrder, PO_FIELDS)
-POLineFormSet = line_formset(PurchaseOrder, PurchaseOrderLine, ["product", "description", "quantity", "unit_price"],
-                             extra=4)
+POLineFormSet = line_formset(PurchaseOrder, PurchaseOrderLine,
+                             ["product", "warehouse", "description", "quantity", "unit_price"], extra=4,
+                             form=LineWarehouseForm)
 
 SHIPMENT_FIELDS = [
     "vendor", "forwarder", "mode", "incoterm", "status", "carrier", "vessel_voyage", "origin_port",

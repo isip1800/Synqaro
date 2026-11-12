@@ -19,8 +19,8 @@ class AvailabilityTests(TestCase):
 
     stock 100 opening + 10 received on a closed PO - 20 shipped           = 90 in stock
     SO: quote 5, confirmed 30, partial 50 ordered / 20 shipped (30 left)  = 60 open orders
-    PO: draft 40; open PO 500 of which booked 100 (pending), booked 150 (approved),
-        in transit 120 (WH2), unbooked 130
+    PO: draft 40; open PO 380 (WH1) + 120 (WH2 line) of which booked 100 (pending), booked 150 (approved),
+        in transit 120 (the WH2 line), unbooked 130
     """
 
     def setUp(self):
@@ -33,11 +33,14 @@ class AvailabilityTests(TestCase):
         closed = f.po([(f.a, 10, 50)])
         pur.receive_po(closed, {closed.lines.first().pk: D(10)}, TODAY)  # -> status received
         f.po([(f.a, 40, 50)], send=False)  # draft
-        self.open_po = f.po([(f.a, 500, 50)])
+        self.open_po = f.po([(f.a, 380, 50)], send=False)
         line = self.open_po.lines.first()
+        wh2_line = PurchaseOrderLine.objects.create(order=self.open_po, product=f.a, warehouse=self.wh2,
+                                                    quantity=D(120), unit_price=D(50))
+        pur.send_po(self.open_po)
         self.s_pending = self.ship(line, 100, Shipment.BOOKED, approved=False)
         self.s_approved = self.ship(line, 150, Shipment.PLANNED, approved=True)
-        self.s_transit = self.ship(line, 120, Shipment.IN_TRANSIT, approved=True, warehouse=self.wh2)
+        self.s_transit = self.ship(wh2_line, 120, Shipment.IN_TRANSIT, approved=True)
         self.order(5)  # quote
         sal.confirm_order(self.order(30))
         partial = self.order(50)
@@ -93,12 +96,13 @@ class AvailabilityTests(TestCase):
 
     def test_partition_has_no_double_counting(self):
         b = availability.for_product(self.f.a)
-        line = self.open_po.lines.first()
-        self.assertEqual(b["po_open"] + b["booked"] + b["booked_approved"] + b["in_transit"], line.qty_open)
+        self.assertEqual(b["po_open"] + b["booked"] + b["booked_approved"] + b["in_transit"],
+                         sum(ln.qty_open for ln in self.open_po.lines.all()))
         # Receiving the in-transit shipment moves 120 from In Transit to In Stock
         pur.receive_shipment(self.s_transit, TODAY)
         b2 = availability.for_product(self.f.a)
         self.assertEqual((b2["in_transit"], b2["on_hand"]), (D(0), D(210)))
+        self.assertEqual(availability.for_product(self.f.a, self.wh2.pk)["on_hand"], D(120))  # into the line's WH
         self.assertEqual(b2["available_to_sell"], b["available_to_sell"])
 
     def test_warehouse_filter(self):
@@ -134,6 +138,84 @@ class AvailabilityTests(TestCase):
         import zipfile
 
         self.assertFalse([n for n in zipfile.ZipFile(io.BytesIO(resp.content)).namelist() if n.startswith("/")])
+
+
+class MultiWarehouseTests(TestCase):
+    """Same item stocked, bought and sold in two warehouses."""
+
+    def setUp(self):
+        self.f = Fixture()
+        self.wh2 = Warehouse.objects.create(code="WH2", name="Dallas")
+        for wh, qty in ((self.f.wh, 30), (self.wh2, 50)):
+            adj = StockAdjustment.objects.create(warehouse=wh, date=TODAY, reason="opening")
+            StockAdjustmentLine.objects.create(adjustment=adj, product=self.f.a, quantity=D(qty), unit_cost=D(10))
+            post_adjustment(adj)
+
+    def qty(self, wh):
+        from inventory.models import StockQuant
+
+        q = StockQuant.objects.filter(product=self.f.a, warehouse=wh).first()
+        return q.quantity if q else D(0)
+
+    def test_sales_order_lines_ship_from_their_own_warehouse(self):
+        so = SalesOrder.objects.create(customer=self.f.customer, order_date=TODAY, warehouse=self.f.wh)
+        l1 = SalesOrderLine.objects.create(order=so, product=self.f.a, quantity=D(20))  # defaults to WH1
+        l2 = SalesOrderLine.objects.create(order=so, product=self.f.a, quantity=D(40), warehouse=self.wh2)
+        self.assertEqual(l1.warehouse, self.f.wh)
+        sal.confirm_order(so)
+        b1, b2 = availability.for_product(self.f.a, self.f.wh.pk), availability.for_product(self.f.a, self.wh2.pk)
+        self.assertEqual((b1["so_open"], b1["ats"]), (D(20), D(10)))
+        self.assertEqual((b2["so_open"], b2["ats"]), (D(40), D(10)))
+        deliveries = sal.ship_order(so, {l1.pk: D(20), l2.pk: D(40)}, TODAY)
+        self.assertEqual(sorted(d.warehouse.code for d in deliveries), ["WH1", "WH2"])
+        self.assertEqual((self.qty(self.f.wh), self.qty(self.wh2)), (D(10), D(10)))
+        # WH1 cannot cover more than it holds even though WH2 has stock
+        so2 = SalesOrder.objects.create(customer=self.f.customer, order_date=TODAY, warehouse=self.f.wh)
+        l3 = SalesOrderLine.objects.create(order=so2, product=self.f.a, quantity=D(15))
+        sal.confirm_order(so2)
+        from inventory.services import InsufficientStock
+
+        with self.assertRaises(InsufficientStock):
+            sal.ship_order(so2, {l3.pk: D(15)}, TODAY)
+
+    def test_po_lines_received_into_their_own_warehouse(self):
+        po = self.f.po([(self.f.a, 10, 70)], send=False)  # CNY 70 @ 0.14 = 9.80
+        l2 = PurchaseOrderLine.objects.create(order=po, product=self.f.a, warehouse=self.wh2, quantity=D(25),
+                                              unit_price=D(70))
+        pur.send_po(po)
+        b2 = availability.for_product(self.f.a, self.wh2.pk)
+        self.assertEqual(b2["po_open"], D(25))
+        receipt = pur.receive_po(po, {ln.pk: ln.quantity for ln in po.lines.all()}, TODAY)
+        self.assertIsNone(receipt.warehouse)  # spans two warehouses
+        self.assertEqual(sorted(ln.warehouse.code for ln in receipt.lines.all()), ["WH1", "WH2"])
+        self.assertEqual((self.qty(self.f.wh), self.qty(self.wh2)), (D(40), D(75)))
+        self.assertEqual(l2.receipt_lines.get().warehouse, self.wh2)
+
+    def test_import_shipment_splits_into_line_warehouses(self):
+        po = self.f.po([(self.f.a, 10, 70)], send=False)
+        PurchaseOrderLine.objects.create(order=po, product=self.f.a, warehouse=self.wh2, quantity=D(5),
+                                         unit_price=D(70))
+        pur.send_po(po)
+        shipment = pur.create_shipment_for_po(po)
+        self.assertEqual(availability.for_product(self.f.a, self.wh2.pk)["booked_approved"], D(5))
+        pur.receive_shipment(shipment, TODAY)
+        self.assertEqual((self.qty(self.f.wh), self.qty(self.wh2)), (D(40), D(55)))
+
+    def test_order_form_requires_line_warehouse(self):
+        from products.models import Product  # noqa: F401
+
+        self.client.login(username="admin", password="pw-admin-123")
+        base = {"customer": self.f.customer.pk, "order_date": "2026-06-15", "warehouse": self.f.wh.pk,
+                "tax_rate": "0", "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0", "lines-MIN_NUM_FORMS": "0",
+                "lines-MAX_NUM_FORMS": "1000", "lines-0-product": self.f.a.pk, "lines-0-quantity": "5",
+                "lines-0-discount_pct": "0"}
+        resp = self.client.post("/sales/orders/new/", dict(base, **{"lines-0-warehouse": ""}))
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(SalesOrder.objects.exists())
+        self.client.post("/sales/orders/new/", dict(base, **{"lines-0-warehouse": self.wh2.pk}))
+        self.assertEqual(SalesOrder.objects.get().lines.get().warehouse, self.wh2)
+        page = self.client.get("/sales/orders/new/").content.decode()
+        self.assertIn('name="lines-0-warehouse"', page)
 
 
 class ShipmentApprovalTests(TestCase):

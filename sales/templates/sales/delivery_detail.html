@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% load erp %}
 {% block content %}
-<div class="page-head"><div><h1>Packing slip {{ object.number }}</h1><div class="sub">{{ object.date|date:"Y-m-d" }} · <a href="{{ object.order.get_absolute_url }}">{{ object.order.number }}</a> · {{ object.warehouse }}{% if object.journal_entry %} · <a href="{{ object.journal_entry.get_absolute_url }}">{{ object.journal_entry.number }}</a>{% endif %}</div></div><div class="actions"><button class="btn" onclick="window.print()">Print</button></div></div>
+<div class="page-head"><div><h1>Packing slip {{ object.number }}</h1><div class="sub">{{ object.date|date:"Y-m-d" }} · <a href="{{ object.order.get_absolute_url }}">{{ object.order.number }}</a> · ships from <strong>{{ object.warehouse }}</strong>{% if object.journal_entry %} · <a href="{{ object.journal_entry.get_absolute_url }}">{{ object.journal_entry.number }}</a>{% endif %}</div></div><div class="actions"><button class="btn" onclick="window.print()">Print</button></div></div>
 <div class="grid-2">
   <div class="card"><h3>Ship to</h3><strong>{{ object.order.customer }}</strong><br>{{ object.order.shipping_address|default:object.order.customer.full_address|linebreaksbr }}</div>
   <div class="card"><h3>Shipping</h3>Carrier: {{ object.carrier|default:"—" }}<br>Tracking: {{ object.tracking_number|default:"—" }}<br>Customer PO: {{ object.order.customer_po|default:"—" }}</div>

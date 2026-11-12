@@ -54,8 +54,26 @@ document.querySelectorAll('[data-formset]').forEach(function (fs) {
     var html = tpl.innerHTML.replace(/__prefix__/g, total.value);
     fs.querySelector('tbody').insertAdjacentHTML('beforeend', html);
     total.value = parseInt(total.value, 10) + 1;
+    var head = document.getElementById('id_warehouse'), rowWh = fs.querySelector('tbody tr:last-child select[name$="-warehouse"]');
+    if (head && rowWh && head.value) rowWh.value = head.value;
   });
 });
+// Order header "Default warehouse": lines still on the old default follow the new one
+(function () {
+  var head = document.getElementById('id_warehouse');
+  if (!head || !document.querySelector('select[name^="lines-"][name$="-warehouse"]')) return;
+  var prev = head.value;
+  document.querySelectorAll('select[name^="lines-"][name$="-warehouse"]').forEach(function (s) {
+    var row = s.closest('tr'), prod = row && row.querySelector('select[name$="-product"]');
+    if (prod && !prod.value && head.value) s.value = head.value;
+  });
+  head.addEventListener('change', function () {
+    document.querySelectorAll('select[name^="lines-"][name$="-warehouse"]').forEach(function (s) {
+      if (!s.value || s.value === prev) s.value = head.value;
+    });
+    prev = head.value;
+  });
+})();
 </script>
 </body>
 </html>

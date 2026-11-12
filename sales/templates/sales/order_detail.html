@@ -2,7 +2,7 @@
 {% block content %}
 <div class="page-head">
   <div><h1>{% if object.status == 'quote' %}Quotation{% else %}Sales order{% endif %} {{ object.number }} {% status_badge object %}</h1>
-  <div class="sub"><a href="{{ object.customer.get_absolute_url }}">{{ object.customer }}</a> · {{ object.order_date|date:"Y-m-d" }}{% if object.customer_po %} · Cust. PO {{ object.customer_po }}{% endif %} · {{ object.warehouse.code }}{% if object.sales_rep %} · {{ object.sales_rep }}{% endif %}{% if object.credit_override %} · <span class="badge badge-partial">credit override</span>{% endif %}{% if object.approved_at %} · approved {{ object.approved_at|date:"Y-m-d" }}{% if object.approved_by %} by {{ object.approved_by }}{% endif %}{% endif %}</div></div>
+  <div class="sub"><a href="{{ object.customer.get_absolute_url }}">{{ object.customer }}</a> · {{ object.order_date|date:"Y-m-d" }}{% if object.customer_po %} · Cust. PO {{ object.customer_po }}{% endif %} · default WH {{ object.warehouse.code }}{% if multi_wh %} (multiple warehouses){% endif %}{% if object.sales_rep %} · {{ object.sales_rep }}{% endif %}{% if object.credit_override %} · <span class="badge badge-partial">credit override</span>{% endif %}{% if object.approved_at %} · approved {{ object.approved_at|date:"Y-m-d" }}{% if object.approved_by %} by {{ object.approved_by }}{% endif %}{% endif %}</div></div>
   <div class="actions">
     {% if object.status == 'quote' %}
       <a class="btn" href="{% url 'sales:salesorder_update' object.pk %}">Edit</a>
@@ -21,8 +21,8 @@
 {% if object.status == 'pending' %}<div class="msg msg-warning"><strong>Pending approval:</strong> {{ object.approval_reason|default:"awaiting approval" }}</div>{% elif credit_warning %}<div class="msg msg-warning">{{ credit_warning }} Confirming will send it for approval.</div>{% endif %}
 {% if object.status == 'backorder' %}<div class="msg msg-info">Backordered: everything shipped so far is invoiced; the open balance below is still to ship.</div>{% endif %}
 <div class="card table-wrap"><table class="table">
-<thead><tr><th>Product</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Disc</th><th class="num">Amount</th>{% if object.status in 'quote,pending,confirmed,partial,backorder' %}<th class="num">In stock</th>{% endif %}<th class="num">Shipped</th><th class="num">Invoiced</th></tr></thead><tbody>
-{% for r in lines %}{% with l=r.line %}<tr><td><a href="{{ l.product.get_absolute_url }}">{{ l.product.sku }}</a></td><td>{{ l.description|default:l.product.name }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|money }}</td><td class="num">{% if l.discount_pct %}{{ l.discount_pct|pct }}{% endif %}</td><td class="num">{{ l.amount|money }}</td>{% if object.status in 'quote,pending,confirmed,partial,backorder' %}<td class="num">{% if r.stock < l.qty_to_ship %}<span class="badge badge-overdue">{{ r.stock|qty }}</span>{% else %}{{ r.stock|qty }}{% endif %}</td>{% endif %}<td class="num">{{ l.qty_shipped|qty }}</td><td class="num">{{ l.qty_invoiced|qty }}</td></tr>{% endwith %}{% endfor %}
+<thead><tr><th>Product</th><th>Warehouse</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Disc</th><th class="num">Amount</th>{% if object.status in 'quote,pending,confirmed,partial,backorder' %}<th class="num">In stock</th>{% endif %}<th class="num">Shipped</th><th class="num">Invoiced</th></tr></thead><tbody>
+{% for r in lines %}{% with l=r.line %}<tr><td><a href="{{ l.product.get_absolute_url }}">{{ l.product.sku }}</a></td><td>{{ l.warehouse.code }}</td><td>{{ l.description|default:l.product.name }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|money }}</td><td class="num">{% if l.discount_pct %}{{ l.discount_pct|pct }}{% endif %}</td><td class="num">{{ l.amount|money }}</td>{% if object.status in 'quote,pending,confirmed,partial,backorder' %}<td class="num" title="On hand in {{ l.warehouse.code }}">{% if r.stock < l.qty_to_ship %}<span class="badge badge-overdue">{{ r.stock|qty }}</span>{% else %}{{ r.stock|qty }}{% endif %}</td>{% endif %}<td class="num">{{ l.qty_shipped|qty }}</td><td class="num">{{ l.qty_invoiced|qty }}</td></tr>{% endwith %}{% endfor %}
 </tbody></table>
 <div class="totals" style="padding:12px 16px">
   <div><span>Subtotal</span><span>{{ object.subtotal|money }}</span></div>
@@ -32,7 +32,7 @@
 </div></div>
 <div class="grid-2">
   <div class="card table-wrap"><h3>Deliveries</h3><table class="table compact"><tbody>
-  {% for dl in deliveries %}<tr><td><a href="{{ dl.get_absolute_url }}">{{ dl.number }}</a></td><td>{{ dl.date|date:"Y-m-d" }}</td><td>{{ dl.carrier }} {{ dl.tracking_number }}</td></tr>{% empty %}<tr><td class="empty">None yet.</td></tr>{% endfor %}</tbody></table></div>
+  {% for dl in deliveries %}<tr><td><a href="{{ dl.get_absolute_url }}">{{ dl.number }}</a></td><td>{{ dl.warehouse.code }}</td><td>{{ dl.date|date:"Y-m-d" }}</td><td>{{ dl.carrier }} {{ dl.tracking_number }}</td></tr>{% empty %}<tr><td class="empty">None yet.</td></tr>{% endfor %}</tbody></table></div>
   <div class="card table-wrap"><h3>Invoices</h3><table class="table compact"><tbody>
   {% for i in invoices %}<tr><td><a href="{{ i.get_absolute_url }}">{{ i.number }}</a></td><td>{% status_badge i %}</td><td class="num">{{ i.total|money }}</td></tr>{% empty %}<tr><td class="empty">None yet.</td></tr>{% endfor %}</tbody></table></div>
 </div>

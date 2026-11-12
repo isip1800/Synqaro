@@ -276,6 +276,22 @@ class Command(BaseCommand):
         sal.confirm_order(order(cust[2], 0, [(P[0], 200), (P[1], 60)]))  # over credit limit -> Pending approval
         order(cust[0], 0, [(P[2], 120)])  # open quote
 
+        # Dallas satellite: transfer stock, then an order that ships from both warehouses
+        from inventory.models import StockTransfer, StockTransferLine
+        from inventory.services import post_transfer
+
+        dal = Warehouse.objects.get(code="DAL")
+        trf = StockTransfer.objects.create(from_warehouse=main, to_warehouse=dal, date=ago(1), notes="Stock Dallas")
+        StockTransferLine.objects.create(transfer=trf, product=P[2], quantity=D(150))
+        StockTransferLine.objects.create(transfer=trf, product=P[5], quantity=D(100))
+        post_transfer(trf, admin)
+        split = SalesOrder.objects.create(customer=cust[3], order_date=today, warehouse=dal, sales_rep=james,
+                                          customer_po="HH-7781", created_by=admin)
+        SalesOrderLine.objects.create(order=split, product=P[2], quantity=D(60))  # ships from DAL (default)
+        SalesOrderLine.objects.create(order=split, product=P[5], quantity=D(40))  # ships from DAL
+        SalesOrderLine.objects.create(order=split, product=P[0], warehouse=main, quantity=D(24))  # from LB1
+        sal.confirm_order(split)
+
         # ---- Vendor portal login
         u = User.objects.create_user("sunrise", password="demo12345", first_name="Lily", last_name="Zhang",
                                      email="lily@sunrise.example")
