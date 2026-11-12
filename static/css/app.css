@@ -80,7 +80,7 @@ button.link { background: none; border: 0; color: var(--primary); cursor: pointe
 .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--neutral-bg); color: var(--muted); white-space: nowrap; }
 .badge-posted, .badge-confirmed, .badge-sent, .badge-in_transit, .badge-booked, .badge-at_port, .badge-customs, .badge-accrued, .badge-approved { background: var(--info-bg); color: var(--info); }
 .badge-paid, .badge-received, .badge-shipped, .badge-closed, .badge-cleared { background: var(--ok-bg); color: var(--ok); }
-.badge-partial, .badge-quote, .badge-planned { background: var(--warn-bg); color: var(--warn); }
+.badge-partial, .badge-quote, .badge-planned, .badge-pending, .badge-backorder { background: var(--warn-bg); color: var(--warn); }
 .badge-cancelled, .badge-void, .badge-overdue { background: var(--bad-bg); color: var(--bad); }
 .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .toolbar input[type=search] { min-width: 260px; }

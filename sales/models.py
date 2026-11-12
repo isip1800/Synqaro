@@ -65,18 +65,23 @@ class Customer(AddressMixin, TimeStamped):
 class SalesOrder(NumberedMixin, TimeStamped):
     SEQUENCE_KEY = "so"
     SEQUENCE_PREFIX = "SO-"
-    QUOTE, CONFIRMED, PARTIAL, SHIPPED, CLOSED, CANCELLED = (
-        "quote", "confirmed", "partial", "shipped", "closed", "cancelled")
+    QUOTE, PENDING, CONFIRMED, PARTIAL, BACKORDER, SHIPPED, CLOSED, CANCELLED = (
+        "quote", "pending", "confirmed", "partial", "backorder", "shipped", "closed", "cancelled")
     STATUSES = [
         (QUOTE, "Quotation"),
-        (CONFIRMED, "Confirmed"),
+        (PENDING, "Pending approval"),
+        (CONFIRMED, "Open"),
         (PARTIAL, "Partially shipped"),
+        (BACKORDER, "Backordered"),
         (SHIPPED, "Shipped"),
         (CLOSED, "Closed (invoiced)"),
         (CANCELLED, "Cancelled"),
     ]
     EDITABLE_STATUSES = (QUOTE,)
-    OPEN_STATUSES = (CONFIRMED, PARTIAL, SHIPPED)
+    # Orders whose unshipped quantity is committed (reserves stock / counts as open orders)
+    RESERVING_STATUSES = (PENDING, CONFIRMED, PARTIAL, BACKORDER)
+    SHIPPABLE_STATUSES = (CONFIRMED, PARTIAL, BACKORDER)
+    OPEN_STATUSES = (PENDING, CONFIRMED, PARTIAL, BACKORDER, SHIPPED)
 
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name="sales_orders")
     order_date = models.DateField()
@@ -91,6 +96,10 @@ class SalesOrder(NumberedMixin, TimeStamped):
     notes = models.TextField(blank=True)
     status = models.CharField(max_length=12, choices=STATUSES, default=QUOTE, editable=False)
     credit_override = models.BooleanField(default=False, editable=False)
+    approval_reason = models.CharField(max_length=255, blank=True, editable=False)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="+", editable=False)
+    approved_at = models.DateTimeField(null=True, blank=True, editable=False)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                    editable=False)
 
@@ -122,18 +131,29 @@ class SalesOrder(NumberedMixin, TimeStamped):
         return money(sum((line.amount - line.quantity * line.product.avg_cost for line in self.lines.all()), ZERO))
 
     def refresh_status(self):
-        if self.status in (self.QUOTE, self.CANCELLED):
+        if self.status in (self.QUOTE, self.PENDING, self.CANCELLED):
             return
-        lines = list(self.lines.all())
-        if lines and all(line.qty_invoiced >= line.quantity for line in lines):
-            self.status = self.CLOSED
-        elif lines and all(line.qty_shipped >= line.quantity for line in lines):
-            self.status = self.SHIPPED
-        elif any(line.qty_shipped > 0 for line in lines):
-            self.status = self.PARTIAL
-        else:
-            self.status = self.CONFIRMED
+        self.status = self.status_from_lines(list(self.lines.all()))
         self.save(update_fields=["status"])
+
+    @classmethod
+    def status_from_lines(cls, lines):
+        """Closed > Shipped > Backordered (all shipped qty invoiced, balance open) > Partially shipped > Open."""
+        if lines and all(line.qty_invoiced >= line.quantity for line in lines):
+            return cls.CLOSED
+        if lines and all(line.qty_shipped >= line.quantity for line in lines):
+            return cls.SHIPPED
+        if any(line.qty_shipped > 0 for line in lines):
+            if all(line.qty_invoiced >= line.qty_shipped for line in lines):
+                return cls.BACKORDER
+            return cls.PARTIAL
+        return cls.CONFIRMED
+
+    @property
+    def qty_backordered(self):
+        if self.status != self.BACKORDER:
+            return 0
+        return sum((line.qty_to_ship for line in self.lines.all()), ZERO)
 
 
 class SalesOrderLine(models.Model):

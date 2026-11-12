@@ -332,7 +332,7 @@ class Product(TimeStamped):
     def qty_reserved(self):
         from sales.models import SalesOrder
 
-        agg = self.so_lines.filter(order__status__in=[SalesOrder.CONFIRMED, SalesOrder.PARTIAL]).aggregate(
+        agg = self.so_lines.filter(order__status__in=SalesOrder.RESERVING_STATUSES).aggregate(
             t=Sum(F("quantity") - F("qty_shipped"))
         )
         return agg["t"] or ZERO

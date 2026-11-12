@@ -15,8 +15,12 @@ from core.utils import ZERO
 BUCKETS = [
     ("on_hand", "In Stock", "Stock", "Quantity physically in the warehouse(s)"),
     ("so_quote", "Quotes", "Sales orders", "Quantity on open quotations (not deducted)"),
-    ("so_open", "SO Open", "Sales orders", "Confirmed orders, nothing shipped yet"),
-    ("so_partial", "SO Partially Shipped", "Sales orders", "Balance still to ship on partially shipped orders"),
+    ("so_pending", "SO Pending Approval", "Sales orders", "Orders waiting for approval (e.g. credit hold)"),
+    ("so_open", "SO Open", "Sales orders", "Approved orders, nothing shipped yet"),
+    ("so_partial", "SO Partially Shipped", "Sales orders",
+     "Balance to ship on orders shipped but not yet fully invoiced"),
+    ("so_backorder", "Backordered", "Sales orders",
+     "Balance still open after everything shipped so far was invoiced"),
     ("so_to_invoice", "Shipped Not Invoiced", "Sales orders", "Shipped, waiting to be invoiced (info only)"),
     ("po_new", "PO New", "Purchase orders", "Draft POs not yet sent to the vendor (not counted)"),
     ("po_open", "PO Open", "Purchase orders", "Sent / confirmed PO quantity not yet booked on a shipment"),
@@ -24,18 +28,22 @@ BUCKETS = [
     ("booked", "Booked to Ship", "Overseas", "On a planned / booked shipment, awaiting buyer approval"),
     ("booked_approved", "Booked & Approved", "Overseas", "On a planned / booked shipment approved by the buyer"),
     ("in_transit", "In Transit", "Overseas", "Departed: in transit, at port, in customs or cleared"),
-    ("open_orders", "Open Orders", "Availability", "SO Open + SO Partially Shipped"),
+    ("open_orders", "Open Orders", "Availability",
+     "SO Pending Approval + SO Open + SO Partially Shipped + Backordered"),
     ("ats", "Available to Ship", "Availability", "In Stock − Open Orders"),
     ("in_transit_available", "In-Transit Available", "Availability",
      "In Transit − (Open Orders not covered by In Stock)"),
     ("ats_in_transit", "Avail. Ship + In-Transit", "Availability", "In Stock + In Transit − Open Orders"),
+    ("booked_available", "Booked Available", "Availability",
+     "(Booked to Ship + Booked & Approved) − (Open Orders not covered by In Stock + In Transit)"),
     ("available_to_sell", "Available to Sell", "Availability",
-     "In Stock + In Transit + Booked & Approved + Booked to Ship + PO Open − Open Orders"),
+     "In Stock + PO Open + Booked to Ship + Booked & Approved + In Transit − Open Orders"),
 ]
 BUCKET_KEYS = [b[0] for b in BUCKETS]
-DRILLABLE = {"on_hand", "so_quote", "so_open", "so_partial", "so_to_invoice", "po_new", "po_open", "po_closed",
-             "booked", "booked_approved", "in_transit"}
-FORMULAS = {"open_orders", "ats", "in_transit_available", "ats_in_transit", "available_to_sell"}
+DRILLABLE = {"on_hand", "so_quote", "so_pending", "so_open", "so_partial", "so_backorder", "so_to_invoice",
+             "po_new", "po_open", "po_closed", "booked", "booked_approved", "in_transit"}
+FORMULAS = {"open_orders", "ats", "in_transit_available", "ats_in_transit", "booked_available",
+            "available_to_sell"}
 
 
 @dataclass
@@ -47,11 +55,13 @@ class Buckets:
 
     def compute(self):
         v = self.values
-        v["open_orders"] = v["so_open"] + v["so_partial"]
+        v["open_orders"] = v["so_pending"] + v["so_open"] + v["so_partial"] + v["so_backorder"]
         v["ats"] = v["on_hand"] - v["open_orders"]
         shortfall = max(v["open_orders"] - v["on_hand"], ZERO)
         v["in_transit_available"] = v["in_transit"] - shortfall
         v["ats_in_transit"] = v["on_hand"] + v["in_transit"] - v["open_orders"]
+        shortfall_after_transit = max(v["open_orders"] - v["on_hand"] - v["in_transit"], ZERO)
+        v["booked_available"] = v["booked"] + v["booked_approved"] - shortfall_after_transit
         v["available_to_sell"] = (v["on_hand"] + v["in_transit"] + v["booked_approved"] + v["booked"]
                                   + v["po_open"] - v["open_orders"])
         return self
@@ -89,11 +99,11 @@ def compute(product_ids=None, warehouse_id=None):
     so = scope(SalesOrderLine.objects, "order__warehouse_id")
     _add(result, so.filter(order__status=SalesOrder.QUOTE).values("product_id").annotate(t=Sum("quantity")),
          "so_quote")
-    _add(result, so.filter(order__status=SalesOrder.CONFIRMED).values("product_id")
-         .annotate(t=Sum(F("quantity") - F("qty_shipped"))), "so_open")
-    _add(result, so.filter(order__status=SalesOrder.PARTIAL).values("product_id")
-         .annotate(t=Sum(F("quantity") - F("qty_shipped"))), "so_partial")
-    _add(result, so.filter(order__status__in=[SalesOrder.PARTIAL, SalesOrder.SHIPPED])
+    for key, status in (("so_pending", SalesOrder.PENDING), ("so_open", SalesOrder.CONFIRMED),
+                        ("so_partial", SalesOrder.PARTIAL), ("so_backorder", SalesOrder.BACKORDER)):
+        _add(result, so.filter(order__status=status).values("product_id")
+             .annotate(t=Sum(F("quantity") - F("qty_shipped"))), key)
+    _add(result, so.filter(order__status__in=[SalesOrder.PARTIAL, SalesOrder.BACKORDER, SalesOrder.SHIPPED])
          .values("product_id").annotate(t=Sum(F("qty_shipped") - F("qty_invoiced"))), "so_to_invoice")
 
     # Purchase orders
@@ -152,10 +162,16 @@ def detail_rows(product, bucket, warehouse_id=None):
                          "date": None, "status": "In stock", "qty": q.quantity})
         return rows
 
+    def remaining(ln):
+        return ln.quantity - ln.qty_shipped
+
     so_map = {"so_quote": ([SalesOrder.QUOTE], lambda ln: ln.quantity),
-              "so_open": ([SalesOrder.CONFIRMED], lambda ln: ln.quantity - ln.qty_shipped),
-              "so_partial": ([SalesOrder.PARTIAL], lambda ln: ln.quantity - ln.qty_shipped),
-              "so_to_invoice": ([SalesOrder.PARTIAL, SalesOrder.SHIPPED], lambda ln: ln.qty_shipped - ln.qty_invoiced)}
+              "so_pending": ([SalesOrder.PENDING], remaining),
+              "so_open": ([SalesOrder.CONFIRMED], remaining),
+              "so_partial": ([SalesOrder.PARTIAL], remaining),
+              "so_backorder": ([SalesOrder.BACKORDER], remaining),
+              "so_to_invoice": ([SalesOrder.PARTIAL, SalesOrder.BACKORDER, SalesOrder.SHIPPED],
+                                lambda ln: ln.qty_shipped - ln.qty_invoiced)}
     if bucket in so_map:
         statuses, qty = so_map[bucket]
         for ln in wh(SalesOrderLine.objects.filter(product=product, order__status__in=statuses), "order__warehouse_id") \
