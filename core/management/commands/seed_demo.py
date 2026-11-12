@@ -141,6 +141,20 @@ class Command(BaseCommand):
         P.append(self.apparel_item(ea, sunrise))
         self.demo_images(P)
 
+        # Buyers at each customer
+        from sales.models import CustomerBuyer
+
+        for c, buyers in zip(cust, [[("Rachel Kim", "Senior Buyer — Home"), ("Tom Alvarez", "Buyer — Kitchen")],
+                                    [("Priya Shah", "Category Buyer")], [("Dale Mercer", "Purchasing Manager")],
+                                    [("Ana Ruiz", "Buyer")]]):
+            for name, title in buyers:
+                CustomerBuyer.objects.create(customer=c, name=name, title=title,
+                                             email=name.split()[0].lower() + "@" + c.code[2:].lower() + ".example")
+        for p, style in zip(P, ["CK-STYLE-PAN", "CK-STYLE-PAN", "CK-STYLE-UTN", "LT-STYLE-LMP", "LT-STYLE-BLB",
+                                "TL-STYLE-SCR"]):
+            p.style_number = style
+            p.save(update_fields=["style_number"])
+
         # Opening stock and owner's capital
         adj = StockAdjustment.objects.create(warehouse=main, date=ago(100), reason="opening",
                                              notes="Opening balances")
@@ -244,7 +258,8 @@ class Command(BaseCommand):
         # ---- Sales
         def order(customer, days, lines, rep=None, po=""):
             so = SalesOrder.objects.create(customer=customer, order_date=ago(days), warehouse=main,
-                                           sales_rep=rep or customer.sales_rep, customer_po=po, created_by=admin)
+                                           sales_rep=rep or customer.sales_rep, customer_po=po, created_by=admin,
+                                           buyer=customer.buyers.first())
             sal.copy_order_defaults(so)
             so.save()
             for p, q in lines:
@@ -314,7 +329,7 @@ class Command(BaseCommand):
         lv = lambda kind, code: LookupValue.objects.get(kind=kind, code=code)  # noqa: E731
         ic = ItemClass.objects.get(code="10PKPANTIE", parent__code="UNDERWEAR")
         p = Product.objects.create(
-            sku="14241190", name="10 Pack Panties - Hearts", uom=uom, item_class=ic, brand=lv("brand", "KENSIEGIRL"),
+            sku="14241190", style_number="KG-PNT-10HRT", name="10 Pack Panties - Hearts", uom=uom, item_class=ic, brand=lv("brand", "KENSIEGIRL"),
             package_size=lv("package_size", "10"), season=lv("season", "Q421"), gender=lv("gender", "Girl"),
             size_range=lv("size_range", "GIRLS-4-12"), size_breakdown=lv("size_breakdown", "1-1-2-1-1"),
             material=lv("material", "INT100COT"), customer_code=lv("customer_code", "WINNERS"),

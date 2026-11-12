@@ -3,14 +3,14 @@ from django.urls import path
 from core.crud import crud_urls
 
 from . import views
-from .forms import CUSTOMER_FIELDS
+from .forms import CUSTOMER_FIELDS, BuyerFormSet
 from .models import Customer
 
 app_name = "sales"
 
 urlpatterns = [
     *crud_urls(Customer, prefix="customers/", fields=CUSTOMER_FIELDS, columns=(), list_view=views.CustomerList,
-               detail_view=views.CustomerDetail),
+               detail_view=views.CustomerDetail, formset_class=BuyerFormSet),
     path("customers/<int:pk>/statement/", views.customer_statement, name="customer_statement"),
     path("orders/", views.OrderList.as_view(), name="salesorder_list"),
     path("orders/new/", views.OrderCreate.as_view(), name="salesorder_create"),

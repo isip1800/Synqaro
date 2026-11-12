@@ -135,25 +135,47 @@ class TransferDetail(ErpDetailView):
 
 # ----------------------------------------------------------------------------- quantity buckets / availability
 
+ATTR_COLUMNS = [
+    ("name", "Description"), ("style_number", "Style #"), ("item_class", "Item Class"),
+    ("product_type", "Product Type"), ("brand", "Brand"), ("season", "Season"), ("size_range", "Size Range"),
+    ("material", "Material"), ("customer_code", "Customer Code"), ("hs_code", "HTS Code"),
+]
+DEFAULT_ATTRS = ["name"]
+
+
+def attr_value(p, key):
+    if key == "item_class":
+        return p.item_class.full_code if p.item_class else ""
+    if key == "product_type":
+        return p.item_class.description if p.item_class else ""
+    if key in ("brand", "season", "size_range", "material", "customer_code"):
+        v = getattr(p, key)
+        return (v.description or v.code) if v else ""
+    return getattr(p, key) or ""
+
+
 def _availability_rows(request):
     from django.db.models import Q
 
     from . import availability
 
     g = request.GET
-    products = Product.objects.filter(is_active=True).select_related("item_class__parent__parent", "brand", "season") \
-        .prefetch_related("images")
+    products = Product.objects.filter(is_active=True).select_related(
+        "item_class__parent__parent", "brand", "season", "size_range", "material", "customer_code",
+    ).prefetch_related("images")
     if g.get("q"):
         q = g["q"].strip()
-        products = products.filter(Q(sku__icontains=q) | Q(name__icontains=q) | Q(barcode__icontains=q))
-    if g.get("tier1"):
-        products = products.filter(item_class__parent__parent_id=g["tier1"])
-    if g.get("item_class"):
-        products = products.filter(item_class_id=g["item_class"])
-    if g.get("brand"):
-        products = products.filter(brand_id=g["brand"])
-    if g.get("season"):
-        products = products.filter(season_id=g["season"])
+        products = products.filter(Q(sku__icontains=q) | Q(name__icontains=q) | Q(barcode__icontains=q)
+                                   | Q(style_number__icontains=q))
+    if g.get("sku"):
+        products = products.filter(sku__icontains=g["sku"].strip())
+    if g.get("style"):
+        products = products.filter(style_number__icontains=g["style"].strip())
+    if g.get("product_type"):
+        products = products.filter(item_class_id=g["product_type"])
+    for key in ("brand", "season", "size_range", "material", "customer_code"):
+        if g.get(key):
+            products = products.filter(**{f"{key}_id": g[key]})
     products = list(products.order_by("sku"))
     wh = g.get("warehouse") or None
     data = availability.compute([p.pk for p in products], wh)
@@ -166,6 +188,34 @@ def _availability_rows(request):
             continue
         rows.append((p, b))
     return rows, wh
+
+
+def availability_columns(request, screen):
+    """Visible columns for an availability screen: list of dicts (key, label, group, kind, help...)."""
+    from core.columns import chosen_columns
+
+    from . import availability
+
+    available = [(k, label, "Item", "attr", "") for k, label in ATTR_COLUMNS] + [
+        (k, label, group, "bucket", help_text) for k, label, group, help_text in availability.BUCKETS]
+    keys = chosen_columns(request, f"availability:{screen}", [c[0] for c in available],
+                          DEFAULT_ATTRS + availability.BUCKET_KEYS)
+    meta = {c[0]: c for c in available}
+    return [meta[k] for k in keys], [(c[0], c[1] if c[2] == "Item" else f"{c[2]}: {c[1]}") for c in available], keys
+
+
+def availability_filters_context(request):
+    from products.models import LookupValue
+
+    tier3 = ItemClass.objects.filter(level=3, is_active=True).select_related("parent__parent") \
+        .order_by("parent__parent__code", "parent__code", "description")
+    groups = {}
+    for ic in tier3:
+        groups.setdefault(f"{ic.parent.parent.description} / {ic.parent.description}", []).append(ic)
+    lookups = {k: LookupValue.objects.filter(kind=k, is_active=True)
+               for k in ("brand", "season", "size_range", "material", "customer_code")}
+    return {"product_type_groups": sorted(groups.items()), "lookups": lookups,
+            "warehouses": Warehouse.objects.filter(is_active=True)}
 
 
 def availability_view(request):
@@ -196,7 +246,7 @@ def availability_definitions(request):
 def _availability_screen(request, screen):
     from itertools import groupby
 
-    from products.models import LookupValue
+    from core.columns import chooser_context
 
     from . import availability
 
@@ -204,25 +254,25 @@ def _availability_screen(request, screen):
     floored = availability.floor_keys(screen)
     rows, wh = _availability_rows(request)
     rows = [(p, availability.apply_floor(b, floored)) for p, b in rows]
-    groups = [(g, len(list(items))) for g, items in groupby(availability.BUCKETS, key=lambda b: b[2])]
+    visible, options, keys = availability_columns(request, screen)
     cols, prev = [], None
-    for key, label, group, help_text in availability.BUCKETS:
-        cols.append({"key": key, "label": label, "help": help_text, "start": group != prev,
+    for key, label, group, kind, help_text in visible:
+        cols.append({"key": key, "label": label, "help": help_text, "start": group != prev, "kind": kind,
                      "formula": key in availability.FORMULAS, "drill": key in availability.DRILLABLE,
                      "floored": key in floored})
         prev = group
-    table = [(p, [(c, b[c["key"]]) for c in cols]) for p, b in rows]
-    totals = [(c, sum((b[c["key"]] for _, b in rows), ZERO)) for c in cols]
-    return render(request, "inventory/availability.html", {
+    groups = [(g, len(list(items))) for g, items in groupby(visible, key=lambda c: c[2])]
+    table = [(p, [(c, attr_value(p, c["key"]) if c["kind"] == "attr" else b[c["key"]]) for c in cols])
+             for p, b in rows]
+    totals = [(c, sum((b[c["key"]] for _, b in rows), ZERO) if c["kind"] == "bucket" else None) for c in cols]
+    ctx = {
         "title": cfg["title"], "screen": screen, "screen_url": cfg["url"], "floored": floored,
-        "table": table, "cols": cols, "groups": groups, "totals": totals,
-        "warehouses": Warehouse.objects.filter(is_active=True), "params": request.GET, "wh": wh or "",
-        "tier1": ItemClass.objects.filter(level=1),
-        "tier3": ItemClass.objects.filter(level=3).select_related("parent__parent"),
-        "brands": LookupValue.objects.filter(kind="brand", is_active=True),
-        "seasons": LookupValue.objects.filter(kind="season", is_active=True),
-        "query": request.GET.urlencode(),
-    })
+        "table": table, "cols": cols, "groups": groups, "totals": totals, "params": request.GET, "wh": wh or "",
+        "query": request.GET.urlencode(), "row_count": len(rows),
+    }
+    ctx.update(availability_filters_context(request))
+    ctx.update(chooser_context(request, f"availability:{screen}", options, keys))
+    return render(request, "inventory/availability.html", ctx)
 
 
 @internal_required
@@ -249,6 +299,7 @@ def availability_detail(request, pk, bucket):
 def availability_export(request):
     import datetime
     import io
+    from itertools import groupby
 
     import xlsxwriter
     from django.http import HttpResponse
@@ -261,6 +312,7 @@ def availability_export(request):
     floored = availability.floor_keys(screen)
     rows, wh = _availability_rows(request)
     rows = [(p, availability.apply_floor(b, floored)) for p, b in rows]
+    visible, _options, _keys = availability_columns(request, screen)
     out = io.BytesIO()
     wb = xlsxwriter.Workbook(out, {"in_memory": False})
     ws = wb.add_worksheet(availability.SCREENS[screen]["title"][:31])
@@ -269,47 +321,46 @@ def availability_export(request):
     num = wb.add_format({"num_format": "#,##0;[Red]-#,##0", "valign": "vcenter"})
     bold = wb.add_format({"num_format": "#,##0;[Red]-#,##0", "bold": True, "valign": "vcenter"})
     txt = wb.add_format({"valign": "vcenter", "text_wrap": True})
-    fixed = ["Image", "SKU", "Description", "Item Class"]
-    widths = [12, 14, 30, 26]
-    col = len(fixed)
-    from itertools import groupby
-
-    for g, items in groupby(availability.BUCKETS, key=lambda b: b[2]):
+    fixed = 2  # Image, SKU
+    ws.write(1, 0, "Image", head)
+    ws.write(1, 1, "SKU", head)
+    ws.set_column(0, 0, 12)
+    ws.set_column(1, 1, 14)
+    col = fixed
+    for g, items in groupby(visible, key=lambda c: c[2]):
         items = list(items)
         if len(items) > 1:
             ws.merge_range(0, col, 0, col + len(items) - 1, g, grp)
         else:
             ws.write(0, col, g, grp)
         col += len(items)
-    for c, (title, w) in enumerate(zip(fixed, widths)):
-        ws.write(1, c, title, head)
-        ws.set_column(c, c, w)
-    for i, (key, label, _g, help_text) in enumerate(availability.BUCKETS):
-        c = len(fixed) + i
+    for i, (key, label, _g, kind, help_text) in enumerate(visible):
+        c = fixed + i
         ws.write(1, c, label, head)
-        ws.write_comment(1, c, help_text)
-        ws.set_column(c, c, 11)
+        if help_text:
+            ws.write_comment(1, c, help_text)
+        ws.set_column(c, c, 28 if key == "name" else (16 if kind == "attr" else 11))
     ws.set_row(1, 42)
     ws.freeze_panes(2, 2)
     for r, (p, b) in enumerate(rows, start=2):
         ws.set_row(r, 60)
         img = p.primary_image
         if img:
-            longest = max(img.width, img.height, 1)
-            scale = 74 / min(240, longest)  # thumbnails are at most 240px; fit ~74px inside the cell
+            scale = 74 / min(240, max(img.width, img.height, 1))
             ws.insert_image(r, 0, f"{p.sku}.jpg", {"image_data": io.BytesIO(bytes(img.thumbnail)),
                                                    "x_scale": scale, "y_scale": scale, "x_offset": 3,
                                                    "y_offset": 3, "object_position": 1})
         ws.write(r, 1, p.sku, txt)
-        ws.write(r, 2, p.name, txt)
-        ws.write(r, 3, p.item_class.full_code if p.item_class else "", txt)
-        for i, key in enumerate(availability.BUCKET_KEYS):
-            ws.write_number(r, len(fixed) + i, float(b[key]), bold if key in availability.FORMULAS else num)
+        for i, (key, _label, _g, kind, _h) in enumerate(visible):
+            if kind == "attr":
+                ws.write(r, fixed + i, str(attr_value(p, key)), txt)
+            else:
+                ws.write_number(r, fixed + i, float(b[key]), bold if key in availability.FORMULAS else num)
     total_row = len(rows) + 2
     ws.write(total_row, 1, "TOTAL", head)
-    for i, key in enumerate(availability.BUCKET_KEYS):
-        c = len(fixed) + i
-        ws.write_number(total_row, c, float(sum((b[key] for _, b in rows), ZERO)), bold)
+    for i, (key, _label, _g, kind, _h) in enumerate(visible):
+        if kind == "bucket":
+            ws.write_number(total_row, fixed + i, float(sum((b[key] for _, b in rows), ZERO)), bold)
     wb.close()
     resp = HttpResponse(_sanitize_xlsx(out.getvalue()),
                         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

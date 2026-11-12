@@ -15,6 +15,9 @@ def resolve(obj, accessor):
     for i, part in enumerate(parts):
         if value is None:
             return None
+        if isinstance(value, dict):
+            value = value.get(part)
+            continue
         display = getattr(value, f"get_{part}_display", None)
         if display and i == len(parts) - 1:
             return display()

@@ -166,6 +166,8 @@ class UnitOfMeasure(models.Model):
 
 class Product(TimeStamped):
     sku = models.CharField("SKU", max_length=50, unique=True)
+    style_number = models.CharField("Style #", max_length=50, blank=True, db_index=True,
+                                    help_text="Style the item belongs to (several SKUs can share a style)")
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     item_class = models.ForeignKey(ItemClass, null=True, blank=True, on_delete=models.PROTECT,

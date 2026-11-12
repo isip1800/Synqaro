@@ -16,7 +16,7 @@ REQUIRED_DETAILS = ["item_class", "brand", "package_size", "season", "gender", "
                     "customer_code"]
 
 PRODUCT_SECTIONS = [
-    ("General", ["sku", "name", "description", "item_class", "uom", "barcode", "is_active"]),
+    ("General", ["sku", "style_number", "name", "description", "item_class", "uom", "barcode", "is_active"]),
     ("Item details", ["brand", "package_size", "season", "seasonal_cutoff", "gender", "size_range",
                       "size_breakdown", "item_spec", "material", "customer_code", "label1", "label2",
                       "multi_pc_set"]),

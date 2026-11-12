@@ -118,3 +118,62 @@ class ExchangeRateList(ErpListView):
         ctx = super().get_context_data(**kwargs)
         ctx["currencies"] = Currency.objects.all()
         return ctx
+
+
+# ----------------------------------------------------------------------------- column chooser / saved filters
+
+def _safe_next(request, default="/"):
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    nxt = request.POST.get("next") or request.GET.get("next") or default
+    return nxt if url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}) else default
+
+
+@internal_required
+def columns_save(request):
+    from django.views.decorators.http import require_POST  # noqa: F401
+
+    from .columns import reset_columns, save_columns
+
+    if request.method == "POST":
+        screen = request.POST.get("screen", "")[:90]
+        if request.POST.get("reset"):
+            reset_columns(request.user, screen)
+            messages.success(request, "Columns reset to the default.")
+        else:
+            keys = request.POST.getlist("col")
+            if not keys:
+                messages.error(request, "Pick at least one column.")
+            else:
+                save_columns(request.user, screen, keys)
+                messages.success(request, "Columns saved.")
+    return redirect(_safe_next(request))
+
+
+@internal_required
+def filter_save(request):
+    from .models import SavedFilter
+
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()[:80]
+        screen = request.POST.get("screen", "")[:90]
+        if not name:
+            messages.error(request, "Give the filter a name.")
+        else:
+            SavedFilter.objects.update_or_create(
+                user=request.user, screen=screen, name=name,
+                defaults={"query": request.POST.get("query", ""), "shared": bool(request.POST.get("shared"))})
+            messages.success(request, f"Filter “{name}” saved.")
+    return redirect(_safe_next(request))
+
+
+@internal_required
+def filter_delete(request, pk):
+    from .models import SavedFilter
+
+    if request.method == "POST":
+        f = SavedFilter.objects.filter(pk=pk).first()
+        if f and (f.user_id == request.user.id or request.user.is_superuser):
+            f.delete()
+            messages.success(request, f"Filter “{f.name}” deleted.")
+    return redirect(_safe_next(request))

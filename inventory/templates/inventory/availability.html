@@ -1,33 +1,41 @@
 {% extends "base.html" %}{% load erp %}
 {% block content %}
-<div class="page-head"><div><h1>{{ title }}</h1><div class="sub">Quantity buckets by item{% if wh %} for the selected warehouse{% else %} across all warehouses{% endif %}. Click a number to see the orders and shipments behind it.{% if floored %} Highlighted columns show 0 instead of negative numbers (<a href="{% url 'core:company' %}">change</a>).{% endif %}</div></div>
+<div class="page-head"><div><h1>{{ title }}</h1><div class="sub">{{ row_count }} item{{ row_count|pluralize }}{% if wh %} · selected warehouse{% else %} · all warehouses{% endif %}. Click a number to see the orders and shipments behind it.{% if floored %} Columns marked ≥0 show 0 instead of negatives (<a href="{% url 'core:company' %}">change</a>).{% endif %}</div></div>
   <div class="actions">
+    {% include "core/_chooser.html" %}
     <a class="btn" href="{% url 'inventory:availability_definitions' %}">ⓘ Bucket definitions</a>
     <a class="btn" href="{% url 'inventory:availability_export' %}?{{ query }}{% if query %}&{% endif %}screen={{ screen }}">⬇ Export to Excel</a></div></div>
-<form class="toolbar" method="get">
-  <input type="search" name="q" value="{{ params.q }}" placeholder="SKU, name, UPC…">
-  <select name="warehouse" onchange="this.form.submit()"><option value="">All warehouses</option>{% for w in warehouses %}<option value="{{ w.pk }}" {% if wh == w.pk|stringformat:"s" %}selected{% endif %}>{{ w.code }}</option>{% endfor %}</select>
-  <select name="tier1" onchange="this.form.submit()"><option value="">Class: all</option>{% for c in tier1 %}<option value="{{ c.pk }}" {% if params.tier1 == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.code }} — {{ c.description }}</option>{% endfor %}</select>
-  <select name="item_class" onchange="this.form.submit()"><option value="">Product type: all</option>{% for c in tier3 %}<option value="{{ c.pk }}" {% if params.item_class == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.full_code }}</option>{% endfor %}</select>
-  <select name="brand" onchange="this.form.submit()"><option value="">Brand: all</option>{% for v in brands %}<option value="{{ v.pk }}" {% if params.brand == v.pk|stringformat:"s" %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
-  <select name="season" onchange="this.form.submit()"><option value="">Season: all</option>{% for v in seasons %}<option value="{{ v.pk }}" {% if params.season == v.pk|stringformat:"s" %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
-  <select name="show" onchange="this.form.submit()"><option value="active">Items with activity</option><option value="short" {% if params.show == "short" %}selected{% endif %}>Short (orders &gt; stock)</option><option value="all" {% if params.show == "all" %}selected{% endif %}>All items</option></select>
-  <button class="btn">Filter</button>
+<form method="get" class="card">
+  <div class="filter-grid">
+    <label>Product Type
+      <select name="product_type"><option value=""></option>
+        {% for group, items in product_type_groups %}<optgroup label="{{ group }}">{% for ic in items %}<option value="{{ ic.pk }}" {% if params.product_type == ic.pk|stringformat:"s" %}selected{% endif %}>{{ ic.description }}</option>{% endfor %}</optgroup>{% endfor %}
+      </select></label>
+    <label>Season<select name="season"><option value=""></option>{% for v in lookups.season %}<option value="{{ v.pk }}" {% if params.season == v.pk|stringformat:"s" %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+    <label>Inventory CD<input name="sku" value="{{ params.sku }}" placeholder="SKU contains…"></label>
+    <label>Style #<input name="style" value="{{ params.style }}" placeholder="Style contains…"></label>
+    <label>Size Range<select name="size_range"><option value=""></option>{% for v in lookups.size_range %}<option value="{{ v.pk }}" {% if params.size_range == v.pk|stringformat:"s" %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+    <label>Warehouse<select name="warehouse"><option value="">All warehouses</option>{% for w in warehouses %}<option value="{{ w.pk }}" {% if wh == w.pk|stringformat:"s" %}selected{% endif %}>{{ w }}</option>{% endfor %}</select></label>
+    <label>Material<select name="material"><option value=""></option>{% for v in lookups.material %}<option value="{{ v.pk }}" {% if params.material == v.pk|stringformat:"s" %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+    <label>Brand<select name="brand"><option value=""></option>{% for v in lookups.brand %}<option value="{{ v.pk }}" {% if params.brand == v.pk|stringformat:"s" %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+    <label>Customer<select name="customer_code"><option value=""></option>{% for v in lookups.customer_code %}<option value="{{ v.pk }}" {% if params.customer_code == v.pk|stringformat:"s" %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+    <label>Show<select name="show"><option value="active">Items with activity</option><option value="short" {% if params.show == "short" %}selected{% endif %}>Short (orders &gt; stock)</option><option value="all" {% if params.show == "all" %}selected{% endif %}>All items</option></select></label>
+    <div style="display:flex;gap:8px"><button class="btn btn-primary">Apply filters</button><a class="btn" href="?">Clear</a></div>
+  </div>
 </form>
 <div class="card table-wrap" style="max-height:72vh">
 <table class="table avail">
   <thead>
-    <tr><th class="pin pin-img"></th><th class="pin pin-sku"></th><th></th>{% for g, n in groups %}<th class="grp" colspan="{{ n }}">{{ g }}</th>{% endfor %}</tr>
-    <tr><th class="pin pin-img"></th><th class="pin pin-sku">SKU</th><th>Description</th>{% for c in cols %}<th class="num {% if c.start %}g-start{% endif %}" title="{{ c.help }}{% if c.floored %} — negatives shown as 0{% endif %}">{{ c.label }}{% if c.floored %} <span class="floor-mark">≥0</span>{% endif %}</th>{% endfor %}</tr>
+    <tr><th class="pin pin-img"></th><th class="pin pin-sku"></th>{% for g, n in groups %}<th class="grp" colspan="{{ n }}">{% if g != "Item" %}{{ g }}{% endif %}</th>{% endfor %}</tr>
+    <tr><th class="pin pin-img"></th><th class="pin pin-sku">SKU</th>{% for c in cols %}<th class="{% if c.kind == 'bucket' %}num{% endif %} {% if c.start %}g-start{% endif %}" title="{{ c.help }}{% if c.floored %} — negatives shown as 0{% endif %}">{{ c.label }}{% if c.floored %} <span class="floor-mark">≥0</span>{% endif %}</th>{% endfor %}</tr>
   </thead>
   <tbody>
   {% for p, cells in table %}{% with img=p.primary_image %}<tr>
     <td class="pin pin-img">{% if img %}<a href="{% url 'products:image' img.pk %}" target="_blank"><img class="thumb thumb-lg" src="{{ img.thumb_url }}" alt="{{ p.sku }}" loading="lazy"></a>{% else %}<div class="thumb thumb-lg empty">▢</div>{% endif %}</td>
     <td class="pin pin-sku"><a href="{{ p.get_absolute_url }}#tab-availability">{{ p.sku }}</a></td>
-    <td style="min-width:180px">{{ p.name }}</td>
-    {% for c, v in cells %}<td class="num {% if c.start %}g-start{% endif %} {% if c.formula %}formula{% endif %} {% if v < 0 %}neg{% elif not v %}zero{% endif %}">{% if c.drill and v %}<a href="{% url 'inventory:availability_detail' p.pk c.key %}{% if wh %}?warehouse={{ wh }}{% endif %}">{{ v|qty }}</a>{% else %}{{ v|qty }}{% endif %}</td>{% endfor %}
-  </tr>{% endwith %}{% empty %}<tr><td colspan="30" class="empty">No items match.</td></tr>{% endfor %}
+    {% for c, v in cells %}{% if c.kind == 'attr' %}<td class="{% if c.start %}g-start{% endif %}" {% if c.key == 'name' %}style="min-width:180px"{% else %}style="white-space:nowrap"{% endif %}>{{ v|default:"—" }}</td>{% else %}<td class="num {% if c.start %}g-start{% endif %} {% if c.formula %}formula{% endif %} {% if v < 0 %}neg{% elif not v %}zero{% endif %}">{% if c.drill and v %}<a href="{% url 'inventory:availability_detail' p.pk c.key %}{% if wh %}?warehouse={{ wh }}{% endif %}">{{ v|qty }}</a>{% else %}{{ v|qty }}{% endif %}</td>{% endif %}{% endfor %}
+  </tr>{% endwith %}{% empty %}<tr><td colspan="40" class="empty">No items match these filters.</td></tr>{% endfor %}
   </tbody>
-  <tfoot><tr><td class="pin pin-img"></td><td class="pin pin-sku">Total</td><td></td>{% for c, v in totals %}<td class="num {% if c.start %}g-start{% endif %} {% if v < 0 %}neg{% endif %}">{{ v|qty }}</td>{% endfor %}</tr></tfoot>
+  <tfoot><tr><td class="pin pin-img"></td><td class="pin pin-sku">Total</td>{% for c, v in totals %}<td class="{% if c.kind == 'bucket' %}num{% endif %} {% if c.start %}g-start{% endif %} {% if v and v < 0 %}neg{% endif %}">{% if v is not None %}{{ v|qty }}{% endif %}</td>{% endfor %}</tr></tfoot>
 </table></div>
 {% endblock %}

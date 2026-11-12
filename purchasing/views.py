@@ -62,8 +62,18 @@ class POList(ErpListView):
     title = "Purchase Orders"
     columns = (("PO", "number"), ("Vendor", "vendor"), ("Date", "order_date"), ("Expected", "expected_date"),
                ("Currency", "currency"), ("Total", "total"), ("Status", "status"))
+    available_columns = (("PO", "number"), ("Vendor", "vendor"), ("Vendor ref.", "vendor_reference"),
+                         ("Date", "order_date"), ("Expected", "expected_date"),
+                         ("Vendor ready date", "vendor_confirmed_ship_date"), ("Incoterm", "incoterm"),
+                         ("Default warehouse", "warehouse"), ("Currency", "currency"), ("Rate", "exchange_rate"),
+                         ("Total", "total"), ("Total (base)", "total_base"), ("Ext FS cost USD", "fs_totals.usd"),
+                         ("Ext FS cost RMB", "fs_totals.rmb"), ("Payment terms", "payment_terms"),
+                         ("Status", "status"))
     search_fields = ("number", "vendor__name", "vendor_reference")
-    select_related = ("vendor", "currency")
+    select_related = ("vendor", "currency", "warehouse")
+
+    def get_queryset(self):
+        return super().get_queryset().prefetch_related("lines")
 
     def get_filters(self):
         return (("status", "Status", PurchaseOrder.STATUSES),

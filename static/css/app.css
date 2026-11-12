@@ -189,3 +189,17 @@ pre.plain { white-space: pre-wrap; font: inherit; margin: 0; }
 .field-wide { grid-column: 1 / -1; }
 .multi-check > div { display: flex; flex-wrap: wrap; gap: 6px 18px; }
 .multi-check > div > div label { display: flex; gap: 6px; align-items: center; font-weight: 400; color: var(--text); font-size: 13px; }
+/* Dropdowns: column chooser / saved filters */
+details.dropdown { position: relative; }
+details.dropdown > summary { list-style: none; }
+details.dropdown > summary::-webkit-details-marker { display: none; }
+.dropdown-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(16,24,40,.14); padding: 12px; width: 300px; max-height: 70vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+.dropdown-title { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.check-list { display: flex; flex-direction: column; gap: 4px; }
+.check-list label, .inline-check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.check-list input, .inline-check input { width: auto; }
+.dropdown-actions { display: flex; gap: 6px; }
+.saved-row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.dropdown-panel form { display: flex; flex-direction: column; gap: 6px; }
+.filter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px 12px; margin-bottom: 12px; align-items: end; }
+.filter-grid label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 600; color: var(--muted); }
