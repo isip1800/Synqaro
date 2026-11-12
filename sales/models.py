@@ -62,6 +62,28 @@ class Customer(AddressMixin, TimeStamped):
         return self.credit_limit - self.balance - self.open_orders_value
 
 
+class CustomerBuyer(models.Model):
+    """A buyer (purchasing contact) at a customer. A customer can have several."""
+
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="buyers")
+    name = models.CharField(max_length=100)
+    title = models.CharField(max_length=100, blank=True, help_text="e.g. Senior Buyer — Baby & Kids")
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=50, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["customer__name", "name"]
+        verbose_name = "buyer"
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def open_order_count(self):
+        return self.sales_orders.filter(status__in=SalesOrder.OPEN_STATUSES).count()
+
+
 class SalesOrder(NumberedMixin, TimeStamped):
     SEQUENCE_KEY = "so"
     SEQUENCE_PREFIX = "SO-"
@@ -84,6 +106,8 @@ class SalesOrder(NumberedMixin, TimeStamped):
     OPEN_STATUSES = (PENDING, CONFIRMED, PARTIAL, BACKORDER, SHIPPED)
 
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name="sales_orders")
+    buyer = models.ForeignKey(CustomerBuyer, null=True, blank=True, on_delete=models.SET_NULL,
+                              related_name="sales_orders", help_text="The customer's buyer who placed the order")
     order_date = models.DateField()
     requested_date = models.DateField(null=True, blank=True)
     valid_until = models.DateField(null=True, blank=True, help_text="Quote expiry")

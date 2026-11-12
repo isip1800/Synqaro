@@ -188,3 +188,34 @@ class NumberedMixin(models.Model):
 
     def __str__(self):
         return self.number
+
+
+class UserPreference(models.Model):
+    """Per-user settings such as chosen columns for a screen."""
+
+    user = models.ForeignKey("auth.User", on_delete=models.CASCADE, related_name="erp_preferences")
+    key = models.CharField(max_length=100)
+    value = models.JSONField(default=dict)
+
+    class Meta:
+        unique_together = ("user", "key")
+
+    def __str__(self):
+        return f"{self.user} {self.key}"
+
+
+class SavedFilter(models.Model):
+    """A named set of filters for a screen (stored as the query string)."""
+
+    user = models.ForeignKey("auth.User", on_delete=models.CASCADE, related_name="saved_filters")
+    screen = models.CharField(max_length=100)
+    name = models.CharField(max_length=80)
+    query = models.TextField(blank=True)
+    shared = models.BooleanField(default=False, help_text="Visible to all staff")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name

@@ -31,6 +31,10 @@
   {% for p in payments %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a></td><td>{{ p.date|date:"Y-m-d" }}</td><td>{{ p.get_method_display }}</td><td class="num">{{ p.amount|money }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}
   </tbody></table></div>
 </div>
+<div class="card table-wrap"><div class="section-title" style="padding:14px 16px 0"><h3>Buyers</h3><a class="btn btn-sm" href="{% url 'sales:customer_update' object.pk %}">Add / edit buyers</a></div>
+<table class="table compact"><thead><tr><th>Name</th><th>Title</th><th>Email</th><th>Phone</th><th class="num">Open orders</th></tr></thead><tbody>
+{% for b in object.buyers.all %}<tr><td>{{ b.name }}{% if not b.is_active %} <span class="badge">inactive</span>{% endif %}</td><td>{{ b.title }}</td><td>{% if b.email %}<a href="mailto:{{ b.email }}">{{ b.email }}</a>{% endif %}</td><td>{{ b.phone }}</td><td class="num">{{ b.open_order_count }}</td></tr>
+{% empty %}<tr><td colspan="5" class="empty">No buyers yet.</td></tr>{% endfor %}</tbody></table></div>
 <div class="card"><h3>Contact</h3><dl class="dl-grid">
   <div><dt>Contact</dt><dd>{{ object.contact_name|default:"—" }}</dd></div><div><dt>Email</dt><dd>{{ object.email|default:"—" }}</dd></div><div><dt>Phone</dt><dd>{{ object.phone|default:"—" }}</dd></div><div><dt>Tax ID</dt><dd>{{ object.tax_id|default:"—" }}</dd></div><div><dt>Ship to</dt><dd>{{ object.shipping_address|default:object.full_address|linebreaksbr }}</dd></div></dl>
   {% if object.notes %}<p>{{ object.notes|linebreaksbr }}</p>{% endif %}</div>

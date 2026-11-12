@@ -14,7 +14,9 @@ from .mixins import InternalRequiredMixin
 class ErpListView(InternalRequiredMixin, ListView):
     template_name = "core/list.html"
     paginate_by = 50
-    columns = ()  # sequence of (label, accessor)
+    columns = ()  # default visible columns: sequence of (label, accessor)
+    available_columns = None  # optional larger set the user can choose from (column chooser)
+    screen_key = None
     search_fields = ()
     filters = ()  # sequence of (param, label, choices) applied as exact filters
     title = None
@@ -43,9 +45,20 @@ class ErpListView(InternalRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         meta = self.model._meta
+        from .columns import chooser_context, chosen_columns
+
+        available = list(self.available_columns or self.columns)
+        if available:
+            screen = self.screen_key or f"list:{meta.app_label}.{meta.model_name}"
+            keys = chosen_columns(self.request, screen, [a for _, a in available], [a for _, a in self.columns])
+            by_key = dict((a, label) for label, a in available)
+            columns = [(by_key[k], k) for k in keys]
+            ctx.update(chooser_context(self.request, screen, [(a, label) for label, a in available], keys))
+        else:
+            columns = self.columns
         ctx.update(
             title=self.title or meta.verbose_name_plural.title(),
-            columns=self.columns,
+            columns=columns,
             create_url=self.create_url,
             search_enabled=bool(self.search_fields),
             q=self.request.GET.get("q", ""),
@@ -79,6 +92,9 @@ class ErpFormMixin(InternalRequiredMixin):
         ctx = super().get_context_data(**kwargs)
         if "formset" not in ctx:
             ctx["formset"] = self.get_formset()
+        if ctx["formset"] is not None:
+            meta = ctx["formset"].model._meta
+            ctx["formset_title"] = "Lines" if meta.model_name.endswith("line") else meta.verbose_name_plural.title()
         verb = "Edit" if self.object and self.object.pk else "New"
         ctx["title"] = self.title or f"{verb} {self.model._meta.verbose_name.title()}"
         ctx["cancel_url"] = (

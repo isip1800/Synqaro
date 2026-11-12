@@ -1,0 +1,27 @@
+{# Columns + Saved filters widgets. Needs `chooser` from core.columns.chooser_context #}
+{% if chooser %}
+<details class="dropdown">
+  <summary class="btn">☰ Columns</summary>
+  <form method="post" action="{% url 'core:columns_save' %}" class="dropdown-panel">{% csrf_token %}
+    <input type="hidden" name="screen" value="{{ chooser.screen }}"><input type="hidden" name="next" value="{{ chooser.next }}">
+    <div class="dropdown-title">Show columns</div>
+    <div class="check-list">{% for key, label, on in chooser.options %}<label><input type="checkbox" name="col" value="{{ key }}" {% if on %}checked{% endif %}> {{ label }}</label>{% endfor %}</div>
+    <div class="dropdown-actions"><button class="btn btn-primary btn-sm">Apply</button><button class="btn btn-sm" name="reset" value="1">Reset to default</button></div>
+  </form>
+</details>
+<details class="dropdown">
+  <summary class="btn">★ Saved filters{% if chooser.filters %} ({{ chooser.filters|length }}){% endif %}</summary>
+  <div class="dropdown-panel">
+    {% for f in chooser.filters %}<div class="saved-row"><a href="{{ chooser.path }}?{{ f.query }}">{{ f.name }}</a>{% if f.shared %} <span class="badge">shared</span>{% endif %}
+      {% if f.user_id == user.id or user.is_superuser %}<form method="post" action="{% url 'core:filter_delete' f.pk %}" class="inline">{% csrf_token %}<input type="hidden" name="next" value="{{ chooser.next }}"><button class="link" title="Delete">✕</button></form>{% endif %}</div>
+    {% empty %}<p class="muted" style="margin:0 0 8px">No saved filters yet.</p>{% endfor %}
+    <form method="post" action="{% url 'core:filter_save' %}">{% csrf_token %}
+      <input type="hidden" name="screen" value="{{ chooser.screen }}"><input type="hidden" name="query" value="{{ chooser.query }}"><input type="hidden" name="next" value="{{ chooser.next }}">
+      <div class="dropdown-title">Save current filters</div>
+      <input name="name" placeholder="Filter name, e.g. Winners Q4 baby" required>
+      <label class="inline-check"><input type="checkbox" name="shared" value="1"> Share with everyone</label>
+      <button class="btn btn-primary btn-sm">Save filter</button>
+    </form>
+  </div>
+</details>
+{% endif %}

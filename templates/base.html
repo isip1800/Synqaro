@@ -58,6 +58,20 @@ document.querySelectorAll('[data-formset]').forEach(function (fs) {
     if (head && rowWh && head.value) rowWh.value = head.value;
   });
 });
+// Sales order: only offer the selected customer's buyers
+(function () {
+  var cust = document.getElementById('id_customer'), buyer = document.getElementById('id_buyer');
+  if (!cust || !buyer) return;
+  function sync() {
+    Array.prototype.forEach.call(buyer.options, function (o) {
+      if (!o.value) return;
+      var show = o.dataset.customer === cust.value;
+      o.hidden = !show; o.disabled = !show;
+      if (!show && o.selected) buyer.value = '';
+    });
+  }
+  cust.addEventListener('change', sync); sync();
+})();
 // Order header "Default warehouse": lines still on the old default follow the new one
 (function () {
   var head = document.getElementById('id_warehouse');

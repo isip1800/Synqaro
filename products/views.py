@@ -42,14 +42,14 @@ def filtered_products(request):
     q = g.get("q", "").strip()
     if q:
         qs = qs.filter(Q(sku__icontains=q) | Q(name__icontains=q) | Q(hs_code__icontains=q) | Q(barcode__icontains=q)
-                       | Q(cross_references__alternate_id__icontains=q)).distinct()
+                       | Q(style_number__icontains=q) | Q(cross_references__alternate_id__icontains=q)).distinct()
     if g.get("tier1"):
         qs = qs.filter(item_class__parent__parent_id=g["tier1"])
     if g.get("tier2"):
         qs = qs.filter(item_class__parent_id=g["tier2"])
     if g.get("item_class"):
         qs = qs.filter(item_class_id=g["item_class"])
-    for key in ("brand", "season", "gender", "material", "customer_code"):
+    for key in ("brand", "season", "gender", "material", "customer_code", "size_range"):
         if g.get(key):
             qs = qs.filter(**{f"{key}_id": g[key]})
     if g.get("is_active") in ("True", "False"):
@@ -64,6 +64,30 @@ def filtered_products(request):
     return qs.order_by("sku")
 
 
+PRODUCT_COLUMNS = [
+    # key, label, kind (text / num / money / cost / pct / qty)
+    ("name", "Description", "text"), ("style_number", "Style #", "text"), ("item_class", "Item Class", "text"),
+    ("product_type", "Product Type", "text"), ("brand", "Brand", "text"), ("season", "Season", "text"),
+    ("gender", "Gender", "text"), ("size_range", "Size Range", "text"), ("material", "Material", "text"),
+    ("customer_code", "Customer Code", "text"), ("barcode", "UPC", "text"), ("hs_code", "HTS Code", "text"),
+    ("total_duty_rate", "Duty + Tariff %", "pct"), ("carton_qty", "Carton Qty", "qty"),
+    ("carton_cbm", "Carton CBM", "cost"), ("qty_per_40hq", "Qty / 40'HQ", "qty"), ("on_hand", "On Hand", "qty"),
+    ("avg_cost", "Avg Landed Cost", "cost"), ("list_price", "List Price", "money"), ("margin_pct", "Margin %", "pct"),
+]
+DEFAULT_PRODUCT_COLUMNS = ["name", "item_class", "brand", "season", "hs_code", "total_duty_rate", "carton_qty",
+                           "qty_per_40hq", "on_hand", "avg_cost", "list_price"]
+
+
+def product_cell(p, key):
+    from inventory.views import attr_value
+
+    if key in ("item_class", "product_type", "brand", "season", "size_range", "material", "customer_code"):
+        return attr_value(p, key)
+    if key == "gender":
+        return p.gender.code if p.gender else ""
+    return getattr(p, key)
+
+
 class ProductList(ErpListView):
     model = Product
     template_name = "products/product_list.html"
@@ -73,10 +97,19 @@ class ProductList(ErpListView):
         return filtered_products(self.request)
 
     def get_context_data(self, **kwargs):
+        from core.columns import chooser_context, chosen_columns
         from inventory.models import Warehouse
 
         ctx = super().get_context_data(**kwargs)
-        lookups = {k: LookupValue.objects.filter(kind=k, is_active=True) for k in ("brand", "season")}
+        screen = "list:products.product"
+        keys = chosen_columns(self.request, screen, [c[0] for c in PRODUCT_COLUMNS], DEFAULT_PRODUCT_COLUMNS)
+        meta = {c[0]: c for c in PRODUCT_COLUMNS}
+        cols = [meta[k] for k in keys]
+        ctx["cols"] = cols
+        ctx["rows"] = [(p, [(c, product_cell(p, c[0])) for c in cols]) for p in ctx["object_list"]]
+        ctx.update(chooser_context(self.request, screen, [(c[0], c[1]) for c in PRODUCT_COLUMNS], keys))
+        lookups = {k: LookupValue.objects.filter(kind=k, is_active=True)
+                   for k in ("brand", "season", "size_range", "material", "customer_code")}
         ctx.update(
             tier1=ItemClass.objects.filter(level=1), tier2=ItemClass.objects.filter(level=2).select_related("parent"),
             tier3=ItemClass.objects.filter(level=3).select_related("parent__parent"), lookups=lookups,

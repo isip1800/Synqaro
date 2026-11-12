@@ -91,8 +91,15 @@ class OrderList(ErpListView):
     columns = (("Number", "number"), ("Customer", "customer"), ("Date", "order_date"),
                ("Requested", "requested_date"), ("Sales person", "sales_rep"), ("Total", "total"),
                ("Status", "status"))
-    search_fields = ("number", "customer__name", "customer_po")
-    select_related = ("customer", "sales_rep")
+    available_columns = (("Number", "number"), ("Customer", "customer"), ("Buyer", "buyer"),
+                         ("Customer PO #", "customer_po"), ("Date", "order_date"), ("Requested", "requested_date"),
+                         ("Valid until", "valid_until"), ("Sales person", "sales_rep"),
+                         ("Default warehouse", "warehouse"), ("Subtotal", "subtotal"), ("Tax", "tax"),
+                         ("Total", "total"), ("Uninvoiced total", "uninvoiced_total"),
+                         ("Est. margin", "estimated_margin"), ("Status", "status"),
+                         ("Approval reason", "approval_reason"))
+    search_fields = ("number", "customer__name", "customer_po", "buyer__name")
+    select_related = ("customer", "sales_rep", "buyer", "warehouse")
 
     def get_queryset(self):
         return rep_scope(self.request, super().get_queryset().prefetch_related("lines"))

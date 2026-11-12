@@ -2,7 +2,7 @@
 {% block content %}
 <div class="page-head">
   <div><h1>{% if object.status == 'quote' %}Quotation{% else %}Sales order{% endif %} {{ object.number }} {% status_badge object %}</h1>
-  <div class="sub"><a href="{{ object.customer.get_absolute_url }}">{{ object.customer }}</a> · {{ object.order_date|date:"Y-m-d" }}{% if object.customer_po %} · Cust. PO {{ object.customer_po }}{% endif %} · default WH {{ object.warehouse.code }}{% if multi_wh %} (multiple warehouses){% endif %}{% if object.sales_rep %} · {{ object.sales_rep }}{% endif %}{% if object.credit_override %} · <span class="badge badge-partial">credit override</span>{% endif %}{% if object.approved_at %} · approved {{ object.approved_at|date:"Y-m-d" }}{% if object.approved_by %} by {{ object.approved_by }}{% endif %}{% endif %}</div></div>
+  <div class="sub"><a href="{{ object.customer.get_absolute_url }}">{{ object.customer }}</a> · {{ object.order_date|date:"Y-m-d" }}{% if object.buyer %} · Buyer: {{ object.buyer }}{% if object.buyer.email %} (<a href="mailto:{{ object.buyer.email }}">{{ object.buyer.email }}</a>){% endif %}{% endif %}{% if object.customer_po %} · Cust. PO {{ object.customer_po }}{% endif %} · default WH {{ object.warehouse.code }}{% if multi_wh %} (multiple warehouses){% endif %}{% if object.sales_rep %} · {{ object.sales_rep }}{% endif %}{% if object.credit_override %} · <span class="badge badge-partial">credit override</span>{% endif %}{% if object.approved_at %} · approved {{ object.approved_at|date:"Y-m-d" }}{% if object.approved_by %} by {{ object.approved_by }}{% endif %}{% endif %}</div></div>
   <div class="actions">
     {% if object.status == 'quote' %}
       <a class="btn" href="{% url 'sales:salesorder_update' object.pk %}">Edit</a>
