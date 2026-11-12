@@ -96,7 +96,7 @@ class PurchaseOrder(NumberedMixin, TimeStamped):
                                   help_text="Pre-fills the warehouse on new lines; each line can go to its own warehouse")
     payment_terms = models.CharField(max_length=100, blank=True, help_text="e.g. 30% deposit, 70% against B/L")
     notes = models.TextField(blank=True)
-    status = models.CharField(max_length=12, choices=STATUSES, default=DRAFT, editable=False)
+    status = models.CharField(max_length=12, choices=STATUSES, default=DRAFT, editable=False, db_index=True)
     vendor_reference = models.CharField(max_length=60, blank=True, help_text="Vendor's proforma / order no.")
     vendor_confirmed_at = models.DateTimeField(null=True, blank=True, editable=False)
     vendor_confirmed_ship_date = models.DateField(null=True, blank=True, editable=False)
@@ -266,7 +266,7 @@ class Shipment(NumberedMixin, TimeStamped):
                                   help_text="Goods are received into each PO line's own warehouse")
     allocation_method = models.CharField(max_length=10, choices=ALLOCATIONS, default=ALLOC_VALUE,
                                          help_text="How landed costs are spread over the goods")
-    status = models.CharField(max_length=12, choices=STATUSES, default=PLANNED)
+    status = models.CharField(max_length=12, choices=STATUSES, default=PLANNED, db_index=True)
     received_on = models.DateField(null=True, blank=True, editable=False)
     notes = models.TextField(blank=True)
     created_via_portal = models.BooleanField(default=False, editable=False)

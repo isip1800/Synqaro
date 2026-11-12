@@ -82,9 +82,16 @@ def reorder(request):
                          "reserved": rs, "projected": projected, "reorder_point": s.reorder_point,
                          "suggest": suggest})
     if not wh_filter:
-        for p in Product.objects.filter(is_active=True, reorder_point__gt=0).exclude(pk__in=with_settings) \
-                .select_related("preferred_vendor"):
-            oh, oo, rs = p.qty_on_hand, p.qty_on_order, p.qty_reserved
+        from . import availability
+
+        fallback = list(Product.objects.filter(is_active=True, reorder_point__gt=0).exclude(pk__in=with_settings)
+                        .select_related("preferred_vendor"))
+        data = availability.compute([p.pk for p in fallback]) if fallback else {}
+        for p in fallback:
+            b = data[p.pk]
+            oh = b["on_hand"]
+            oo = b["po_new"] + b["po_open"] + b["booked"] + b["booked_approved"] + b["in_transit"]
+            rs = b["open_orders"]
             projected = oh + oo - rs
             if projected <= p.reorder_point:
                 rows.append({"product": p, "warehouse": None, "on_hand": oh, "on_order": oo, "reserved": rs,
@@ -154,15 +161,20 @@ def attr_value(p, key):
     return getattr(p, key) or ""
 
 
-def _availability_rows(request):
+def _availability_rows(request, with_thumbnails=False):
     from django.db.models import Q
 
     from . import availability
 
     g = request.GET
+    from django.db.models import Prefetch
+
+    from products.models import ProductImage
+
     products = Product.objects.filter(is_active=True).select_related(
         "item_class__parent__parent", "brand", "season", "size_range", "material", "customer_code",
-    ).prefetch_related("images")
+    ).prefetch_related(Prefetch("images", queryset=ProductImage.objects.defer(
+        *(("data",) if with_thumbnails else ("data", "thumbnail")))))
     if g.get("q"):
         q = g["q"].strip()
         products = products.filter(Q(sku__icontains=q) | Q(name__icontains=q) | Q(barcode__icontains=q)
@@ -262,10 +274,14 @@ def _availability_screen(request, screen):
                      "floored": key in floored})
         prev = group
     groups = [(g, len(list(items))) for g, items in groupby(visible, key=lambda c: c[2])]
-    table = [(p, [(c, attr_value(p, c["key"]) if c["kind"] == "attr" else b[c["key"]]) for c in cols])
-             for p, b in rows]
     totals = [(c, sum((b[c["key"]] for _, b in rows), ZERO) if c["kind"] == "bucket" else None) for c in cols]
+    from django.core.paginator import Paginator
+
+    page_obj = Paginator(rows, 100).get_page(request.GET.get("page"))
+    table = [(p, [(c, attr_value(p, c["key"]) if c["kind"] == "attr" else b[c["key"]]) for c in cols])
+             for p, b in page_obj.object_list]
     ctx = {
+        "page_obj": page_obj, "is_paginated": page_obj.has_other_pages(),
         "title": cfg["title"], "screen": screen, "screen_url": cfg["url"], "floored": floored,
         "table": table, "cols": cols, "groups": groups, "totals": totals, "params": request.GET, "wh": wh or "",
         "query": request.GET.urlencode(), "row_count": len(rows),
@@ -310,7 +326,7 @@ def availability_export(request):
 
     screen = request.GET.get("screen") if request.GET.get("screen") in availability.SCREENS else "inventory"
     floored = availability.floor_keys(screen)
-    rows, wh = _availability_rows(request)
+    rows, wh = _availability_rows(request, with_thumbnails=True)
     rows = [(p, availability.apply_floor(b, floored)) for p, b in rows]
     visible, _options, _keys = availability_columns(request, screen)
     out = io.BytesIO()

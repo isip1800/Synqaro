@@ -105,44 +105,61 @@ def compute(product_ids=None, warehouse_id=None):
     from .models import StockQuant
 
     result = defaultdict(Buckets)
+    # For large selections it is cheaper to aggregate everything and pick the wanted products afterwards
+    id_filter = product_ids if product_ids is not None and len(product_ids) <= 500 else None
 
     def scope(qs, wh_path, product_path="product_id"):
-        if product_ids is not None:
-            qs = qs.filter(**{f"{product_path}__in": product_ids})
+        if id_filter is not None:
+            qs = qs.filter(**{f"{product_path}__in": id_filter})
         if warehouse_id:
             qs = qs.filter(**{wh_path: warehouse_id})
         return qs
+
+    def add_rows(rows, keys):
+        for row in rows:
+            vals = result[row["product_id"]].values
+            for key in keys:
+                vals[key] += row[key] or ZERO
 
     # Stock
     _add(result, scope(StockQuant.objects, "warehouse_id").values("product_id").annotate(t=Sum("quantity")),
          "on_hand")
 
-    # Sales orders by status
-    so = scope(SalesOrderLine.objects, "warehouse_id")
-    _add(result, so.filter(order__status=SalesOrder.QUOTE).values("product_id").annotate(t=Sum("quantity")),
-         "so_quote")
-    for key, status in (("so_pending", SalesOrder.PENDING), ("so_open", SalesOrder.CONFIRMED),
-                        ("so_partial", SalesOrder.PARTIAL), ("so_backorder", SalesOrder.BACKORDER)):
-        _add(result, so.filter(order__status=status).values("product_id")
-             .annotate(t=Sum(F("quantity") - F("qty_shipped"))), key)
-    _add(result, so.filter(order__status__in=[SalesOrder.PARTIAL, SalesOrder.BACKORDER, SalesOrder.SHIPPED])
-         .values("product_id").annotate(t=Sum(F("qty_shipped") - F("qty_invoiced"))), "so_to_invoice")
+    # Sales orders: every status bucket in one grouped query
+    remaining = F("quantity") - F("qty_shipped")
+    so_aggs = {
+        "so_quote": Sum("quantity", filter=Q(order__status=SalesOrder.QUOTE)),
+        "so_pending": Sum(remaining, filter=Q(order__status=SalesOrder.PENDING)),
+        "so_open": Sum(remaining, filter=Q(order__status=SalesOrder.CONFIRMED)),
+        "so_partial": Sum(remaining, filter=Q(order__status=SalesOrder.PARTIAL)),
+        "so_backorder": Sum(remaining, filter=Q(order__status=SalesOrder.BACKORDER)),
+        "so_to_invoice": Sum(F("qty_shipped") - F("qty_invoiced"),
+                             filter=Q(order__status__in=[SalesOrder.PARTIAL, SalesOrder.BACKORDER,
+                                                         SalesOrder.SHIPPED])),
+    }
+    so = scope(SalesOrderLine.objects, "warehouse_id").exclude(
+        order__status__in=[SalesOrder.CLOSED, SalesOrder.CANCELLED])
+    add_rows(so.values("product_id").annotate(**so_aggs), so_aggs.keys())
 
-    # Purchase orders
+    # Purchase orders: new / closed in one query
     po = scope(PurchaseOrderLine.objects, "warehouse_id")
-    _add(result, po.filter(order__status=PurchaseOrder.DRAFT).values("product_id").annotate(t=Sum("quantity")),
-         "po_new")
-    _add(result, po.filter(order__status__in=[PurchaseOrder.RECEIVED, PurchaseOrder.CLOSED])
-         .values("product_id").annotate(t=Sum("qty_received")), "po_closed")
+    po_aggs = {
+        "po_new": Sum("quantity", filter=Q(order__status=PurchaseOrder.DRAFT)),
+        "po_closed": Sum("qty_received", filter=Q(order__status__in=[PurchaseOrder.RECEIVED,
+                                                                      PurchaseOrder.CLOSED])),
+    }
+    add_rows(po.values("product_id").annotate(**po_aggs), po_aggs.keys())
 
-    # Shipments (active), attributed to the warehouse of the PO line they will be received into
+    # Shipments (active): booked / approved / in transit in one query, by the PO line's warehouse
     active = ShipmentLine.objects.exclude(shipment__status__in=[Shipment.RECEIVED, Shipment.CANCELLED])
     sl = scope(active, "po_line__warehouse_id", "po_line__product_id")
     booked_q = Q(shipment__status__in=Shipment.BOOKED_STATUSES)
-    for key, cond in (("booked", booked_q & Q(shipment__approved=False)),
-                      ("booked_approved", booked_q & Q(shipment__approved=True)),
-                      ("in_transit", Q(shipment__status__in=Shipment.IN_TRANSIT_STATUSES))):
-        _add(result, sl.filter(cond).values(product_id=F("po_line__product_id")).annotate(t=Sum("quantity")), key)
+    sh_aggs = {
+        "booked": Sum("quantity", filter=booked_q & Q(shipment__approved=False)),
+        "booked_approved": Sum("quantity", filter=booked_q & Q(shipment__approved=True)),
+        "in_transit": Sum("quantity", filter=Q(shipment__status__in=Shipment.IN_TRANSIT_STATUSES)),
+    }
+    add_rows(sl.values(product_id=F("po_line__product_id")).annotate(**sh_aggs), sh_aggs.keys())
 
     # PO Open = open PO qty not yet on any active shipment (per PO line, so nothing double counts)
     open_lines = po.filter(order__status__in=PurchaseOrder.OPEN_STATUSES).annotate(
@@ -153,11 +170,13 @@ def compute(product_ids=None, warehouse_id=None):
         if unbooked > 0:
             result[line["product_id"]].values["po_open"] += unbooked
 
+    if product_ids is not None:
+        wanted = set(product_ids)
+        result = defaultdict(Buckets, {pid: b for pid, b in result.items() if pid in wanted})
+        for pid in product_ids:
+            result[pid]  # noqa: B018 - make sure every requested product has an entry
     for b in result.values():
         b.compute()
-    if product_ids is not None:
-        for pid in product_ids:
-            result[pid].compute()
     return result
 
 

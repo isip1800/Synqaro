@@ -119,7 +119,7 @@ class SalesOrder(NumberedMixin, TimeStamped):
     tax_rate = models.DecimalField("Tax %", max_digits=6, decimal_places=3, default=ZERO)
     shipping_address = models.TextField(blank=True)
     notes = models.TextField(blank=True)
-    status = models.CharField(max_length=12, choices=STATUSES, default=QUOTE, editable=False)
+    status = models.CharField(max_length=12, choices=STATUSES, default=QUOTE, editable=False, db_index=True)
     credit_override = models.BooleanField(default=False, editable=False)
     approval_reason = models.CharField(max_length=255, blank=True, editable=False)
     approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,

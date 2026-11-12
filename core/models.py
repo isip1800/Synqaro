@@ -133,11 +133,25 @@ class Company(models.Model):
         except ValueError:
             return None
 
+    _cache = None
+
     @classmethod
     def get(cls):
+        """The company record, read once per request (the cache is cleared when each request starts and on save)."""
+        if cls._cache is not None:
+            return cls._cache
         Currency.objects.get_or_create(code="USD", defaults={"name": "US Dollar", "symbol": "$"})
         obj, _ = cls.objects.get_or_create(pk=1)
+        cls._cache = obj
         return obj
+
+    @classmethod
+    def clear_cache(cls):
+        cls._cache = None
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        Company.clear_cache()
 
 
 def default_warehouse():
