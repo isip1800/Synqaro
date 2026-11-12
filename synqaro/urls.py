@@ -23,3 +23,10 @@ urlpatterns = [
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+else:
+    from django.contrib.auth.decorators import login_required
+    from django.urls import re_path
+    from django.views.static import serve
+
+    urlpatterns += [re_path(r"^media/(?P<path>.*)$", login_required(serve),
+                            {"document_root": settings.MEDIA_ROOT})]

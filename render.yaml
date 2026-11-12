@@ -1,0 +1,35 @@
+# Render Blueprint: one web service + one PostgreSQL database.
+# Dashboard -> New -> Blueprint -> pick this repository.
+databases:
+  - name: synqaro-db
+    plan: free
+    databaseName: synqaro
+    user: synqaro
+
+services:
+  - type: web
+    name: synqaro
+    runtime: python
+    plan: free
+    buildCommand: ./build.sh
+    startCommand: ./start.sh
+    healthCheckPath: /login/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.4
+      - key: DATABASE_URL
+        fromDatabase:
+          name: synqaro-db
+          property: connectionString
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "0"
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false          # you type this in when creating the Blueprint
+      - key: SEED_DEMO
+        value: "1"           # load the demo company on first start; set to 0 for a clean install
+      - key: WEB_CONCURRENCY
+        value: "2"

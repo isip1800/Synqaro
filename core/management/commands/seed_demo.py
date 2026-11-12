@@ -25,19 +25,27 @@ from salesteam.models import SalesRep
 class Command(BaseCommand):
     help = "Create demo data (users admin/admin12345, sales rep maria/demo12345, vendor portal sunrise/demo12345)."
 
+    def add_arguments(self, parser):
+        parser.add_argument("--admin", default="admin")
+        parser.add_argument("--password", default="admin12345")
+        parser.add_argument("--if-empty", action="store_true", help="Skip quietly if data already exists")
+
     def handle(self, *args, **opts):
         if Product.objects.exists():
+            if opts["if_empty"]:
+                self.stdout.write("Data already exists; demo seed skipped.")
+                return
             raise CommandError("Data already exists; run on an empty database.")
-        call_command("setup_erp", admin="admin", password="admin12345", stdout=self.stdout)
+        call_command("setup_erp", admin=opts["admin"], password=opts["password"], stdout=self.stdout)
         with transaction.atomic():
-            self.seed()
+            self.seed(opts["admin"])
         self.stdout.write(self.style.SUCCESS(
-            "Demo data loaded.\n  Staff:        admin / admin12345\n  Sales rep:    maria / demo12345\n"
+            f"Demo data loaded.\n  Staff:        {opts['admin']}\n  Sales rep:    maria / demo12345\n"
             "  Vendor portal: sunrise / demo12345"))
 
-    def seed(self):
+    def seed(self, admin_username="admin"):
         User = get_user_model()
-        admin = User.objects.get(username="admin")
+        admin = User.objects.get(username=admin_username)
         today = datetime.date.today()
         ago = lambda n: today - datetime.timedelta(days=n)  # noqa: E731
 

@@ -2,7 +2,7 @@
 
 Synqaro is an ERP for an **import & wholesale distribution** business. It covers buying from overseas suppliers, landing the goods and selling them to wholesale customers. Every operational step posts to a real **double-entry general ledger**.
 
-Built with Django 5. It uses server-rendered pages with no front-end build step. It runs on SQLite out of the box and on PostgreSQL in production.
+Built with Django 5. It uses server-rendered pages with no front-end build step. It runs on SQLite for local development and on PostgreSQL in production. See [Deploying to Render](#deploying-to-render) for the hosted web version.
 
 ## Quick start
 
@@ -117,17 +117,43 @@ portal/       vendor portal views and portal user management
 
 Business rules live in each app's `services.py`, as transactional functions that validate and post. Views stay thin, and the tests drive the services directly.
 
-## Production notes
+## Deploying to Render
 
-Set these environment variables:
-- `DJANGO_SECRET_KEY`
-- `DJANGO_DEBUG=0`
-- `DJANGO_ALLOWED_HOSTS`
-- `DJANGO_CSRF_TRUSTED_ORIGINS`
-- for PostgreSQL: `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`
-- optionally `DJANGO_TIME_ZONE`
+The repository contains a Render Blueprint (`render.yaml`) that creates a web service and a PostgreSQL database.
 
-Then run `python manage.py collectstatic` and serve with gunicorn or uWSGI behind a web server that also serves `media/` (uploaded documents).
+1. Sign in at https://dashboard.render.com and connect your GitHub account if you haven't already. Give Render access to this repository.
+2. Click **New → Blueprint**. Pick this repository and the branch to deploy (whichever branch has `render.yaml`).
+3. When asked, enter a value for **ADMIN_PASSWORD**. This is the password for the `admin` login, so use a strong one.
+4. Click **Apply**. The first deploy takes a few minutes. Then open the URL shown on the `synqaro` service (`https://synqaro-xxxx.onrender.com`).
+
+On first start the app runs migrations, creates the admin user and (because `SEED_DEMO=1`) loads the demo company.
+- The demo also creates `maria` / `demo12345` and `sunrise` / `demo12345`.
+- **Before real use**, either set `SEED_DEMO=0` on a fresh database, or delete the demo users in **Admin → Users**.
+
+What the scripts do:
+- `build.sh` installs dependencies and collects static files.
+- `start.sh` runs migrations and setup, then starts gunicorn.
+- WhiteNoise serves static files.
+- Uploaded shipment documents are served only to signed-in users.
+
+Free-plan limits (check Render's current pricing page):
+- The free web service sleeps when idle, so the first request after a quiet period is slow.
+- The free PostgreSQL database expires after a limited period. Upgrade the database before you rely on the data.
+- Free web services have no persistent disk, so **uploaded documents are lost on each redeploy or restart**.
+- For real use, move to a paid instance and add a persistent disk mounted at, for example, `/var/data`, then set `MEDIA_ROOT=/var/data/media`.
+
+## Production settings (any host)
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string (or `POSTGRES_DB`/`POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_HOST`/`POSTGRES_PORT`) |
+| `DJANGO_SECRET_KEY` | Long random secret |
+| `DJANGO_DEBUG=0` | Production mode (HTTPS redirect, secure cookies, HSTS) |
+| `DJANGO_ALLOWED_HOSTS` | Comma-separated hostnames, e.g. `erp.example.com` (Render's hostname is added automatically) |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | e.g. `https://erp.example.com` when using a custom domain |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Initial superuser created by `start.sh` |
+| `SEED_DEMO` | `1` loads demo data into an empty database |
+| `MEDIA_ROOT` | Where uploaded documents are stored |
 
 ## Roadmap ideas
 - Role-based permissions per module (Django groups are already available)
