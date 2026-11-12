@@ -1,7 +1,9 @@
 {% extends "base.html" %}{% load erp %}
 {% block content %}
-<div class="page-head"><div><h1>Inventory Availability</h1><div class="sub">Quantity buckets by item{% if wh %} for the selected warehouse{% else %} across all warehouses{% endif %}. Click a number to see the orders and shipments behind it.</div></div>
-  <div class="actions"><a class="btn" href="{% url 'inventory:availability_export' %}?{{ query }}">⬇ Export to Excel</a></div></div>
+<div class="page-head"><div><h1>{{ title }}</h1><div class="sub">Quantity buckets by item{% if wh %} for the selected warehouse{% else %} across all warehouses{% endif %}. Click a number to see the orders and shipments behind it.{% if floored %} Highlighted columns show 0 instead of negative numbers (<a href="{% url 'core:company' %}">change</a>).{% endif %}</div></div>
+  <div class="actions">
+    <a class="btn" href="{% url 'inventory:availability_definitions' %}">ⓘ Bucket definitions</a>
+    <a class="btn" href="{% url 'inventory:availability_export' %}?{{ query }}{% if query %}&{% endif %}screen={{ screen }}">⬇ Export to Excel</a></div></div>
 <form class="toolbar" method="get">
   <input type="search" name="q" value="{{ params.q }}" placeholder="SKU, name, UPC…">
   <select name="warehouse" onchange="this.form.submit()"><option value="">All warehouses</option>{% for w in warehouses %}<option value="{{ w.pk }}" {% if wh == w.pk|stringformat:"s" %}selected{% endif %}>{{ w.code }}</option>{% endfor %}</select>
@@ -15,18 +17,17 @@
 <div class="card table-wrap" style="max-height:72vh">
 <table class="table avail">
   <thead>
-    <tr><th colspan="3"></th>{% for g, n in groups %}<th class="grp" colspan="{{ n }}">{{ g }}</th>{% endfor %}</tr>
-    <tr><th></th><th>SKU</th><th>Description</th>{% for c in cols %}<th class="num {% if c.start %}g-start{% endif %}" title="{{ c.help }}">{{ c.label }}</th>{% endfor %}</tr>
+    <tr><th class="pin pin-img"></th><th class="pin pin-sku"></th><th></th>{% for g, n in groups %}<th class="grp" colspan="{{ n }}">{{ g }}</th>{% endfor %}</tr>
+    <tr><th class="pin pin-img"></th><th class="pin pin-sku">SKU</th><th>Description</th>{% for c in cols %}<th class="num {% if c.start %}g-start{% endif %}" title="{{ c.help }}{% if c.floored %} — negatives shown as 0{% endif %}">{{ c.label }}{% if c.floored %} <span class="floor-mark">≥0</span>{% endif %}</th>{% endfor %}</tr>
   </thead>
   <tbody>
   {% for p, cells in table %}{% with img=p.primary_image %}<tr>
-    <td>{% if img %}<img class="thumb" src="{{ img.thumb_url }}" alt="" loading="lazy">{% endif %}</td>
-    <td><a href="{{ p.get_absolute_url }}#tab-availability">{{ p.sku }}</a></td>
+    <td class="pin pin-img">{% if img %}<a href="{% url 'products:image' img.pk %}" target="_blank"><img class="thumb thumb-lg" src="{{ img.thumb_url }}" alt="{{ p.sku }}" loading="lazy"></a>{% else %}<div class="thumb thumb-lg empty">▢</div>{% endif %}</td>
+    <td class="pin pin-sku"><a href="{{ p.get_absolute_url }}#tab-availability">{{ p.sku }}</a></td>
     <td style="min-width:180px">{{ p.name }}</td>
     {% for c, v in cells %}<td class="num {% if c.start %}g-start{% endif %} {% if c.formula %}formula{% endif %} {% if v < 0 %}neg{% elif not v %}zero{% endif %}">{% if c.drill and v %}<a href="{% url 'inventory:availability_detail' p.pk c.key %}{% if wh %}?warehouse={{ wh }}{% endif %}">{{ v|qty }}</a>{% else %}{{ v|qty }}{% endif %}</td>{% endfor %}
   </tr>{% endwith %}{% empty %}<tr><td colspan="30" class="empty">No items match.</td></tr>{% endfor %}
   </tbody>
-  <tfoot><tr><td></td><td colspan="2">Total</td>{% for c, v in totals %}<td class="num {% if c.start %}g-start{% endif %} {% if v < 0 %}neg{% endif %}">{{ v|qty }}</td>{% endfor %}</tr></tfoot>
+  <tfoot><tr><td class="pin pin-img"></td><td class="pin pin-sku">Total</td><td></td>{% for c, v in totals %}<td class="num {% if c.start %}g-start{% endif %} {% if v < 0 %}neg{% endif %}">{{ v|qty }}</td>{% endfor %}</tr></tfoot>
 </table></div>
-<div class="card"><h3>How each bucket is calculated</h3><div class="legend">{% for c in cols %}<div><b>{{ c.label }}</b>{{ c.help }}</div>{% endfor %}</div></div>
 {% endblock %}

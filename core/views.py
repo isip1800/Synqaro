@@ -74,10 +74,26 @@ def _dashboard(request):
     return render(request, "core/dashboard.html", ctx)
 
 
-CompanyForm = model_form(Company, ["name", "legal_name", "tax_id", "address", "phone", "email", "base_currency",
-                                   "default_sales_tax_rate", "default_payment_terms_days",
-                                   "default_warehouse", "require_so_approval", "upc_company_prefix", "upc_next_item_ref", "cbm_20", "cbm_40",
-                                   "cbm_40hq", "cbm_45"])
+_CompanyBase = model_form(Company, ["name", "legal_name", "tax_id", "address", "phone", "email", "base_currency",
+                                    "default_sales_tax_rate", "default_payment_terms_days",
+                                    "default_warehouse", "require_so_approval", "upc_company_prefix",
+                                    "upc_next_item_ref", "cbm_20", "cbm_40", "cbm_40hq", "cbm_45",
+                                    "avail_no_negative", "sales_avail_no_negative"])
+
+
+class CompanyForm(_CompanyBase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from django import forms
+
+        from inventory.availability import FLOORABLE
+
+        for name in ("avail_no_negative", "sales_avail_no_negative"):
+            self.fields[name] = forms.MultipleChoiceField(
+                choices=FLOORABLE, required=False, widget=forms.CheckboxSelectMultiple,
+                label=Company._meta.get_field(name).verbose_name.capitalize(),
+                initial=getattr(self.instance, name),
+                help_text="Ticked fields show 0 instead of a negative number on this screen")
 
 
 @internal_required

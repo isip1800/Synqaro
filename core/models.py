@@ -79,6 +79,10 @@ class ExchangeRate(models.Model):
         return hit.rate if hit else Decimal("1")
 
 
+def default_sales_no_negative():
+    return ["ats", "in_transit_available", "ats_in_transit", "booked_available", "available_to_sell"]
+
+
 class Company(models.Model):
     name = models.CharField(max_length=200, default="My Import Company")
     legal_name = models.CharField(max_length=200, blank=True)
@@ -95,6 +99,10 @@ class Company(models.Model):
         "Sales orders need approval", default=False,
         help_text="If ticked, every confirmed sales order waits for approval. Orders over the customer's credit "
                   "limit always need approval.")
+    # Availability screens: formula fields that show 0 instead of a negative number
+    avail_no_negative = models.JSONField("Inventory Availability: show negatives as 0", default=list, blank=True)
+    sales_avail_no_negative = models.JSONField("Sales Availability: show negatives as 0",
+                                               default=default_sales_no_negative, blank=True)
     # UPC generation
     upc_company_prefix = models.CharField("UPC company prefix", max_length=10, blank=True,
                                           help_text="Your GS1 company prefix, 6–10 digits (e.g. 676191)")

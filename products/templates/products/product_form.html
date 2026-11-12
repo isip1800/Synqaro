@@ -10,7 +10,7 @@
     <h3>{{ title }}</h3>
     <div class="form-grid">
       {% for field in fields %}
-        <label class="field {% if field.errors %}has-error{% endif %} {% if field.field.widget.input_type == 'checkbox' %}checkbox{% endif %}">
+        <label class="field {% if field.errors %}has-error{% endif %} {% if field.widget_type == 'checkbox' %}checkbox{% endif %}">
           <span>{{ field.label }}{% if field.field.required %} *{% endif %}</span>
           {% if field.name in lookup_kinds or field.name == 'label1' or field.name == 'label2' or field.name == 'item_class' %}
             <span class="field-with-link">{{ field }}

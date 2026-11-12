@@ -16,10 +16,10 @@
   </div>
 </div>
 <div class="card table-wrap"><table class="table">
-<thead><tr><th>Product</th><th>Warehouse</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th><th class="num">On shipments</th><th class="num">Received</th><th class="num">Billed</th></tr></thead><tbody>
-{% for l in lines %}<tr><td><a href="{{ l.product.get_absolute_url }}">{{ l.product.sku }}</a></td><td>{{ l.warehouse.code }}</td><td>{{ l.description|default:l.product.name }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|unitcost }}</td><td class="num">{{ l.amount|money }}</td><td class="num">{{ l.qty_on_shipments|qty }}</td><td class="num">{{ l.qty_received|qty }}</td><td class="num">{{ l.qty_billed|qty }}</td></tr>{% endfor %}
+<thead><tr><th>Product</th><th>Warehouse</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th>{% if fs.any %}<th class="num">FS Cost USD</th><th class="num">FS Cost RMB</th><th class="num">Ext FS Cost USD</th><th class="num">Ext FS Cost RMB</th>{% endif %}<th class="num">On shipments</th><th class="num">Received</th><th class="num">Billed</th></tr></thead><tbody>
+{% for l in lines %}<tr><td><a href="{{ l.product.get_absolute_url }}">{{ l.product.sku }}</a></td><td>{{ l.warehouse.code }}</td><td>{{ l.description|default:l.product.name }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|unitcost }}</td><td class="num">{{ l.amount|money }}</td>{% if fs.any %}<td class="num">{{ l.fs_cost_usd|unitcost }}</td><td class="num">{{ l.fs_cost_rmb|unitcost }}</td><td class="num">{{ l.ext_fs_cost_usd|unitcost }}</td><td class="num">{{ l.ext_fs_cost_rmb|unitcost }}</td>{% endif %}<td class="num">{{ l.qty_on_shipments|qty }}</td><td class="num">{{ l.qty_received|qty }}</td><td class="num">{{ l.qty_billed|qty }}</td></tr>{% endfor %}
 </tbody>
-<tfoot><tr><td colspan="5">Total {{ object.currency }}</td><td class="num">{{ object.total|money }}</td><td colspan="3">{% if object.currency_id != base %}≈ {{ object.total_base|money }} {{ base }}{% endif %}</td></tr></tfoot>
+<tfoot><tr><td colspan="5">Total {{ object.currency }}</td><td class="num">{{ object.total|money }}</td>{% if fs.any %}<td></td><td></td><td class="num">{{ fs.usd|money }}</td><td class="num">{{ fs.rmb|money }}</td>{% endif %}<td colspan="3">{% if object.currency_id != base %}≈ {{ object.total_base|money }} {{ base }}{% endif %}</td></tr></tfoot>
 </table></div>
 <div class="grid-2">
   <div class="card">

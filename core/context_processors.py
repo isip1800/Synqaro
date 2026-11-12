@@ -35,6 +35,7 @@ NAV = [
     ]),
     ("Inventory", [
         ("Availability (Qty Buckets)", "inventory:availability", "inventory/availability"),
+        ("Sales Availability", "inventory:sales_availability", "inventory/sales-availability"),
         ("Stock on Hand", "inventory:stock", "inventory/stock"),
         ("Reorder Report", "inventory:reorder", "inventory/reorder"),
         ("Adjustments", "inventory:stockadjustment_list", "inventory/adjustments"),

@@ -140,6 +140,55 @@ class AvailabilityTests(TestCase):
         self.assertFalse([n for n in zipfile.ZipFile(io.BytesIO(resp.content)).namelist() if n.startswith("/")])
 
 
+class AvailabilityScreensTests(TestCase):
+    def setUp(self):
+        self.f = Fixture()
+        so = SalesOrder.objects.create(customer=self.f.customer, order_date=TODAY, warehouse=self.f.wh)
+        SalesOrderLine.objects.create(order=so, product=self.f.a, quantity=D(25), unit_price=D(1))
+        sal.confirm_order(so)  # no stock -> Available to Ship = -25
+        self.client.login(username="admin", password="pw-admin-123")
+
+    def cell(self, url, key):
+        resp = self.client.get(url)
+        return [v for c, v in resp.context["table"][0][1] if c["key"] == key][0]
+
+    def test_each_screen_has_its_own_negative_setting(self):
+        from core.models import Company
+
+        self.assertEqual(self.cell("/inventory/availability/", "ats"), D(-25))  # default: real negatives
+        self.assertEqual(self.cell("/inventory/sales-availability/", "ats"), D(0))  # default: floored
+        c = Company.get()
+        c.avail_no_negative, c.sales_avail_no_negative = ["ats"], []
+        c.save()
+        self.assertEqual(self.cell("/inventory/availability/", "ats"), D(0))
+        self.assertEqual(self.cell("/inventory/availability/", "available_to_sell"), D(-25))
+        self.assertEqual(self.cell("/inventory/sales-availability/", "ats"), D(-25))
+        self.assertEqual(self.cell("/inventory/availability/", "open_orders"), D(25))
+
+    def test_settings_form_and_pages(self):
+        from core.models import Company
+
+        resp = self.client.get("/settings/company/")
+        self.assertContains(resp, 'name="sales_avail_no_negative"')
+        data = {k: v for k, v in resp.context["form"].initial.items() if v is not None}
+        data.update({"name": "Co", "base_currency": "USD", "default_sales_tax_rate": "0",
+                     "default_payment_terms_days": "30", "upc_next_item_ref": "1", "cbm_20": "27", "cbm_40": "58",
+                     "cbm_40hq": "67", "cbm_45": "76", "avail_no_negative": ["ats", "booked_available"],
+                     "sales_avail_no_negative": []})
+        data.pop("require_so_approval", None)
+        self.client.post("/settings/company/", data)
+        c = Company.get()
+        self.assertEqual((sorted(c.avail_no_negative), c.sales_avail_no_negative), (["ats", "booked_available"], []))
+        page = self.client.get("/inventory/availability/definitions/")
+        self.assertContains(page, "Booked Available")
+        self.assertContains(page, "Available to Ship, Booked Available show 0 when negative")
+        screen = self.client.get("/inventory/availability/").content.decode()
+        self.assertNotIn("How each bucket is calculated", screen)
+        self.assertIn("pin-img", screen)
+        resp = self.client.get("/inventory/availability/export.xlsx?screen=sales")
+        self.assertIn("sales-availability", resp["Content-Disposition"])
+
+
 class MultiWarehouseTests(TestCase):
     """Same item stocked, bought and sold in two warehouses."""
 
