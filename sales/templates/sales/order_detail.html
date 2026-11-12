@@ -1,0 +1,39 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{% if object.status == 'quote' %}Quotation{% else %}Sales order{% endif %} {{ object.number }} {% status_badge object %}</h1>
+  <div class="sub"><a href="{{ object.customer.get_absolute_url }}">{{ object.customer }}</a> · {{ object.order_date|date:"Y-m-d" }}{% if object.customer_po %} · Cust. PO {{ object.customer_po }}{% endif %} · {{ object.warehouse.code }}{% if object.sales_rep %} · {{ object.sales_rep }}{% endif %}{% if object.credit_override %} · <span class="badge badge-partial">credit override</span>{% endif %}</div></div>
+  <div class="actions">
+    {% if object.status == 'quote' %}
+      <a class="btn" href="{% url 'sales:salesorder_update' object.pk %}">Edit</a>
+      {% if credit_warning %}
+        <form method="post" action="{% url 'sales:order_confirm_override' object.pk %}" onsubmit="return confirm('Confirm despite credit limit?')">{% csrf_token %}<button class="btn btn-primary">Confirm with credit override</button></form>
+      {% else %}
+        <form method="post" action="{% url 'sales:order_confirm' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Confirm order</button></form>
+      {% endif %}
+    {% endif %}
+    {% if object.status in 'confirmed,partial' %}<a class="btn btn-primary" href="{% url 'sales:order_ship' object.pk %}">Ship / deliver</a>{% endif %}
+    {% if object.status in 'partial,shipped' %}<form method="post" action="{% url 'sales:order_invoice' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Create invoice</button></form>{% endif %}
+    <button class="btn" onclick="window.print()">Print</button>
+    {% if object.status in 'quote,confirmed' %}<form method="post" action="{% url 'sales:order_cancel' object.pk %}" onsubmit="return confirm('Cancel this order?')">{% csrf_token %}<button class="btn btn-danger">Cancel</button></form>{% endif %}
+  </div>
+</div>
+{% if credit_warning %}<div class="msg msg-warning">{{ credit_warning }}</div>{% endif %}
+<div class="card table-wrap"><table class="table">
+<thead><tr><th>Product</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Disc</th><th class="num">Amount</th>{% if object.status in 'quote,confirmed,partial' %}<th class="num">In stock</th>{% endif %}<th class="num">Shipped</th><th class="num">Invoiced</th></tr></thead><tbody>
+{% for r in lines %}{% with l=r.line %}<tr><td><a href="{{ l.product.get_absolute_url }}">{{ l.product.sku }}</a></td><td>{{ l.description|default:l.product.name }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|money }}</td><td class="num">{% if l.discount_pct %}{{ l.discount_pct|pct }}{% endif %}</td><td class="num">{{ l.amount|money }}</td>{% if object.status in 'quote,confirmed,partial' %}<td class="num">{% if r.stock < l.qty_to_ship %}<span class="badge badge-overdue">{{ r.stock|qty }}</span>{% else %}{{ r.stock|qty }}{% endif %}</td>{% endif %}<td class="num">{{ l.qty_shipped|qty }}</td><td class="num">{{ l.qty_invoiced|qty }}</td></tr>{% endwith %}{% endfor %}
+</tbody></table>
+<div class="totals" style="padding:12px 16px">
+  <div><span>Subtotal</span><span>{{ object.subtotal|money }}</span></div>
+  <div><span>Tax ({{ object.tax_rate|pct }})</span><span>{{ object.tax|money }}</span></div>
+  <div class="grand"><span>Total</span><span>{{ object.total|money }}</span></div>
+  <div class="muted"><span>Est. gross margin</span><span>{{ object.estimated_margin|money }}</span></div>
+</div></div>
+<div class="grid-2">
+  <div class="card table-wrap"><h3>Deliveries</h3><table class="table compact"><tbody>
+  {% for dl in deliveries %}<tr><td><a href="{{ dl.get_absolute_url }}">{{ dl.number }}</a></td><td>{{ dl.date|date:"Y-m-d" }}</td><td>{{ dl.carrier }} {{ dl.tracking_number }}</td></tr>{% empty %}<tr><td class="empty">None yet.</td></tr>{% endfor %}</tbody></table></div>
+  <div class="card table-wrap"><h3>Invoices</h3><table class="table compact"><tbody>
+  {% for i in invoices %}<tr><td><a href="{{ i.get_absolute_url }}">{{ i.number }}</a></td><td>{% status_badge i %}</td><td class="num">{{ i.total|money }}</td></tr>{% empty %}<tr><td class="empty">None yet.</td></tr>{% endfor %}</tbody></table></div>
+</div>
+{% if object.shipping_address or object.notes %}<div class="grid-2">{% if object.shipping_address %}<div class="card"><h3>Ship to</h3>{{ object.shipping_address|linebreaksbr }}</div>{% endif %}{% if object.notes %}<div class="card"><h3>Notes</h3>{{ object.notes|linebreaksbr }}</div>{% endif %}</div>{% endif %}
+{% endblock %}

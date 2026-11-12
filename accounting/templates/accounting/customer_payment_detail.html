@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Customer payment {{ object.number }} {% status_badge object %}</h1><div class="sub"><a href="{{ object.customer.get_absolute_url }}">{{ object.customer }}</a> · {{ object.date|date:"Y-m-d" }} · {{ object.get_method_display }} {{ object.reference }} · into {{ object.deposit_account }}{% if object.journal_entry %} · <a href="{{ object.journal_entry.get_absolute_url }}">{{ object.journal_entry.number }}</a>{% endif %}</div></div>
+  <div class="actions">{% if object.status == 'draft' %}
+    <a class="btn" href="{% url 'accounting:customerpayment_update' object.pk %}">Edit</a>
+    <form method="post" action="{% url 'accounting:customer_payment_auto_allocate' object.pk %}">{% csrf_token %}<button class="btn">Auto-allocate to oldest</button></form>
+    <form method="post" action="{% url 'accounting:customer_payment_post' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Post payment</button></form>{% endif %}</div>
+</div>
+<div class="kpis"><div class="kpi"><div class="label">Amount</div><div class="value">{{ object.amount|money }}</div></div><div class="kpi"><div class="label">Allocated</div><div class="value">{{ object.allocated|money }}</div></div><div class="kpi"><div class="label">Unapplied (credit)</div><div class="value">{{ object.unapplied|money }}</div></div></div>
+<div class="card table-wrap"><h3>Applied to invoices</h3><table class="table"><thead><tr><th>Invoice</th><th>Date</th><th class="num">Invoice total</th><th class="num">Applied</th></tr></thead><tbody>
+{% for a in object.allocations.all %}<tr><td><a href="{{ a.invoice.get_absolute_url }}">{{ a.invoice.number }}</a></td><td>{{ a.invoice.invoice_date|date:"Y-m-d" }}</td><td class="num">{{ a.invoice.total|money }}</td><td class="num">{{ a.amount|money }}</td></tr>{% empty %}<tr><td colspan="4" class="empty">Not allocated — use Auto-allocate or Edit.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

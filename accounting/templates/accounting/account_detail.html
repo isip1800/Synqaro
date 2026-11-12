@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><div><h1>{{ object }}</h1><div class="sub">{{ object.get_account_type_display }}{% if object.system_key %} · system account ({{ object.system_key }}){% endif %}</div></div>
+<div class="actions"><a class="btn" href="{% url 'accounting:account_update' object.pk %}">Edit</a></div></div>
+<form class="toolbar" method="get"><input type="date" name="start" value="{{ start|date:'Y-m-d' }}"><input type="date" name="end" value="{{ end|date:'Y-m-d' }}"><button class="btn">Show ledger</button></form>
+<div class="card table-wrap"><table class="table compact">
+<thead><tr><th>Date</th><th>Entry</th><th>Reference</th><th>Memo</th><th>Party</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
+<tbody><tr><td colspan="7"><em>Opening balance</em></td><td class="num">{{ ledger.opening|money }}</td></tr>
+{% for r in ledger.rows %}<tr><td>{{ r.line.entry.date|date:"Y-m-d" }}</td><td><a href="{{ r.line.entry.get_absolute_url }}">{{ r.line.entry.number }}</a></td><td>{{ r.line.entry.reference }}</td><td>{{ r.line.description|default:r.line.entry.memo }}</td><td>{{ r.line.customer|default:"" }}{{ r.line.vendor|default:"" }}</td><td class="num">{% if r.line.debit %}{{ r.line.debit|money }}{% endif %}</td><td class="num">{% if r.line.credit %}{{ r.line.credit|money }}{% endif %}</td><td class="num">{{ r.balance|money }}</td></tr>{% endfor %}
+</tbody><tfoot><tr><td colspan="7">Closing balance</td><td class="num">{{ ledger.closing|money }}</td></tr></tfoot></table></div>
+{% endblock %}

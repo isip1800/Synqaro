@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block anon %}
+<div class="login-wrap">
+  <form method="post" class="card login-card">
+    {% csrf_token %}
+    <div class="brand big"><span class="logo">S</span> Synqaro</div>
+    <p class="muted">Import & wholesale ERP · staff and vendor portal sign-in</p>
+    {% if form.errors %}<div class="msg msg-error">Invalid username or password.</div>{% endif %}
+    <label>Username {{ form.username }}</label>
+    <label>Password {{ form.password }}</label>
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="btn btn-primary btn-block">Sign in</button>
+  </form>
+</div>
+{% endblock %}

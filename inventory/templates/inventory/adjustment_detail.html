@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Stock adjustment {{ object.number }} {% status_badge object %}</h1><div class="sub">{{ object.warehouse }} · {{ object.date|date:"Y-m-d" }} · {{ object.get_reason_display }}</div></div>
+  <div class="actions">{% if object.status == 'draft' %}
+    <a class="btn" href="{% url 'inventory:stockadjustment_update' object.pk %}">Edit</a>
+    <form method="post" action="{% url 'inventory:adjustment_post' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Post adjustment</button></form>{% endif %}</div>
+</div>
+<div class="card table-wrap"><table class="table"><thead><tr><th>Product</th><th class="num">Qty change</th><th class="num">Unit cost</th></tr></thead><tbody>
+{% for l in object.lines.all %}<tr><td>{{ l.product }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{% if l.unit_cost is not None %}{{ l.unit_cost|unitcost }}{% else %}avg cost{% endif %}</td></tr>{% empty %}<tr><td colspan="3" class="empty">No lines.</td></tr>{% endfor %}
+</tbody></table></div>
+{% if object.notes %}<div class="card"><h3>Notes</h3>{{ object.notes|linebreaksbr }}</div>{% endif %}
+{% endblock %}

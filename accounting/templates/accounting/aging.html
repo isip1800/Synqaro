@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><h1>{{ title }}</h1><div class="actions"><button class="btn" onclick="window.print()">Print</button></div></div>
+<form class="toolbar" method="get"><label>As of <input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}"></label><button class="btn">Run</button></form>
+<div class="card table-wrap"><table class="table">
+<thead><tr><th>{% if kind == 'ar' %}Customer{% else %}Vendor{% endif %}</th>{% for k, label in r.buckets %}<th class="num">{{ label }}</th>{% endfor %}<th class="num">Total</th></tr></thead>
+<tbody>{% for row in r.rows %}
+<tr><td><a href="{{ row.party.get_absolute_url }}"><strong>{{ row.party }}</strong></a></td>{% for k, label in r.buckets %}<td class="num">{% with v=row|get_item:k %}{% if v %}{{ v|money }}{% endif %}{% endwith %}</td>{% endfor %}<td class="num"><strong>{{ row.total|money }}</strong></td></tr>
+{% for doc in row.docs %}<tr class="muted"><td style="padding-left:24px"><a href="{{ doc.doc.get_absolute_url }}">{{ doc.doc.number }}</a>{% if kind == 'ap' %} #{{ doc.doc.vendor_invoice_number }}{% endif %} · {% if doc.days > 0 %}{{ doc.days }} days overdue{% elif doc.days == 0 %}due today{% else %}due in {{ doc.days|stringformat:"d"|slice:"1:" }} days{% endif %}</td>{% for k, label in r.buckets %}<td class="num">{% if doc.bucket == k %}{{ doc.amount|money }}{% endif %}</td>{% endfor %}<td></td></tr>{% endfor %}
+{% empty %}<tr><td colspan="7" class="empty">Nothing outstanding.</td></tr>{% endfor %}</tbody>
+<tfoot><tr><td>Total</td>{% for k, label in r.buckets %}<td class="num">{{ r.totals|get_item:k|money }}</td>{% endfor %}<td class="num">{{ r.totals.total|money }}</td></tr></tfoot>
+</table></div>
+{% endblock %}

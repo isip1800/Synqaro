@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Invoice {{ object.number }} {% status_badge object %}</h1><div class="sub"><a href="{{ object.customer.get_absolute_url }}">{{ object.customer }}</a>{% if object.sales_order %} · <a href="{{ object.sales_order.get_absolute_url }}">{{ object.sales_order.number }}</a>{% endif %}{% if object.journal_entry %} · <a href="{{ object.journal_entry.get_absolute_url }}">{{ object.journal_entry.number }}</a>{% endif %}</div></div>
+  <div class="actions">
+    {% if object.status == 'draft' %}
+      <a class="btn" href="{% url 'accounting:customerinvoice_update' object.pk %}">Edit</a>
+      <form method="post" action="{% url 'accounting:invoice_post' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Post invoice</button></form>
+      <form method="post" action="{% url 'accounting:void_draft' 'invoice' object.pk %}" onsubmit="return confirm('Void this draft?')">{% csrf_token %}<button class="btn btn-danger">Void</button></form>
+    {% elif object.status in 'posted,partial' %}
+      <a class="btn btn-primary" href="{% url 'accounting:customerpayment_create' %}?customer={{ object.customer.pk }}&amount={{ object.balance_due }}">Record payment</a>
+    {% endif %}
+    <button class="btn" onclick="window.print()">Print</button>
+  </div>
+</div>
+<div class="card">
+  <div class="grid-2">
+    <div><strong>{{ company.name }}</strong><br><span class="muted">{{ company.address|linebreaksbr }}</span>{% if company.tax_id %}<br>Tax ID {{ company.tax_id }}{% endif %}</div>
+    <div><dl class="dl-grid"><div><dt>Bill to</dt><dd>{{ object.customer.name }}<br>{{ object.customer.full_address }}</dd></div><div><dt>Invoice date</dt><dd>{{ object.invoice_date|date:"Y-m-d" }}</dd></div><div><dt>Due date</dt><dd>{{ object.due_date|date:"Y-m-d"|default:"on posting" }}</dd></div>{% if object.sales_rep %}<div><dt>Sales person</dt><dd>{{ object.sales_rep }}</dd></div>{% endif %}</dl></div>
+  </div>
+</div>
+<div class="card table-wrap"><table class="table"><thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Disc</th><th class="num">Amount</th></tr></thead><tbody>
+{% for l in object.lines.all %}<tr><td>{{ l.description }}{% if l.account %} <span class="muted">({{ l.account.code }})</span>{% endif %}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|money }}</td><td class="num">{% if l.discount_pct %}{{ l.discount_pct|pct }}{% endif %}</td><td class="num">{{ l.amount|money }}</td></tr>{% empty %}<tr><td colspan="5" class="empty">No lines.</td></tr>{% endfor %}
+</tbody></table>
+<div class="totals" style="padding:12px 16px">
+  <div><span>Subtotal</span><span>{{ object.subtotal|money }}</span></div>
+  <div><span>Tax ({{ object.tax_rate|pct }})</span><span>{{ object.tax|money }}</span></div>
+  <div class="grand"><span>Total</span><span>{{ object.total|money }}</span></div>
+  <div><span>Paid</span><span>{{ object.amount_paid|money }}</span></div>
+  <div class="grand"><span>Balance due</span><span>{{ object.balance_due|money }}</span></div>
+  {% if object.status != 'draft' %}<div class="muted no-print"><span>Gross margin</span><span>{{ object.gross_margin|money }}</span></div>{% endif %}
+</div></div>
+{% if object.allocations.exists %}<div class="card table-wrap no-print"><h3>Payments applied</h3><table class="table compact"><tbody>{% for a in object.allocations.all %}<tr><td><a href="{{ a.payment.get_absolute_url }}">{{ a.payment.number }}</a></td><td>{{ a.payment.date|date:"Y-m-d" }}</td><td class="num">{{ a.amount|money }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% if object.notes %}<div class="card"><h3>Notes</h3>{{ object.notes|linebreaksbr }}</div>{% endif %}
+{% endblock %}

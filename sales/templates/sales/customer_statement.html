@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><div><h1>Statement of account</h1><div class="sub">{{ customer }} · as of {{ today|date:"Y-m-d" }}</div></div><div class="actions"><button class="btn" onclick="window.print()">Print</button></div></div>
+<div class="card"><strong>{{ company.name }}</strong><br><span class="muted">{{ company.address|linebreaksbr }}</span><br><br>To: <strong>{{ customer.name }}</strong><br>{{ customer.full_address }}</div>
+<div class="card table-wrap"><table class="table"><thead><tr><th>Date</th><th>Reference</th><th>Description</th><th class="num">Charges</th><th class="num">Credits</th><th class="num">Balance</th></tr></thead><tbody>
+{% for r in rows %}<tr><td>{{ r.line.entry.date|date:"Y-m-d" }}</td><td>{{ r.line.entry.reference }}</td><td>{{ r.line.entry.memo }}</td><td class="num">{% if r.line.debit %}{{ r.line.debit|money }}{% endif %}</td><td class="num">{% if r.line.credit %}{{ r.line.credit|money }}{% endif %}</td><td class="num">{{ r.balance|money }}</td></tr>
+{% empty %}<tr><td colspan="6" class="empty">No activity.</td></tr>{% endfor %}
+</tbody><tfoot><tr><td colspan="5">Balance due</td><td class="num">{{ balance|money }}</td></tr></tfoot></table></div>
+{% endblock %}

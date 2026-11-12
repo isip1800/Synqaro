@@ -1,0 +1,8 @@
+{% extends "core/list.html" %}{% load erp %}
+{% block list_body %}
+<div class="card table-wrap"><table class="table">
+<thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Country</th><th>Currency</th><th>Terms</th><th>Contact</th></tr></thead><tbody>
+{% for v in object_list %}<tr><td><a href="{{ v.get_absolute_url }}">{{ v.code }}</a></td><td>{{ v.name }}{% if not v.is_active %} <span class="badge">inactive</span>{% endif %}</td><td>{{ v.get_vendor_type_display }}</td><td>{{ v.country|default:"—" }}</td><td>{{ v.currency }}</td><td>{{ v.payment_terms_days }}d{% if v.default_incoterm %} · {{ v.default_incoterm }}{% endif %}</td><td>{{ v.contact_name|default:"" }} {% if v.email %}<a href="mailto:{{ v.email }}">{{ v.email }}</a>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="7" class="empty">No vendors yet.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

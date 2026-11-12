@@ -1,0 +1,7 @@
+{% extends "portal/base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><h1>Purchase Orders</h1></div>
+<div class="card table-wrap"><table class="table"><thead><tr><th>PO</th><th>Date</th><th>Required by</th><th>Incoterm</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
+{% for po in orders %}<tr><td><a href="{% url 'portal:po_detail' po.pk %}">{{ po.number }}</a></td><td>{{ po.order_date|date:"Y-m-d" }}</td><td>{{ po.expected_date|date:"Y-m-d"|default:"—" }}</td><td>{{ po.incoterm|default:"—" }}</td><td class="num">{{ po.total|money }} {{ po.currency }}</td><td>{% status_badge po %}</td></tr>
+{% empty %}<tr><td colspan="6" class="empty">No purchase orders.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><h1>Balance Sheet</h1><div class="actions"><button class="btn" onclick="window.print()">Print</button></div></div>
+<form class="toolbar" method="get"><label>As of <input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}"></label><button class="btn">Run</button></form>
+<div class="card table-wrap" style="max-width:760px"><table class="table"><tbody>
+<tr><td><strong>Assets</strong></td><td></td></tr>{% include "accounting/_section.html" with rows=r.assets %}
+<tr><td><strong>Total assets</strong></td><td class="num"><strong>{{ r.total_assets|money }}</strong></td></tr>
+<tr><td><strong>Liabilities</strong></td><td></td></tr>{% include "accounting/_section.html" with rows=r.liabilities %}
+<tr><td><strong>Total liabilities</strong></td><td class="num"><strong>{{ r.total_liabilities|money }}</strong></td></tr>
+<tr><td><strong>Equity</strong></td><td></td></tr>{% include "accounting/_section.html" with rows=r.equity %}
+<tr><td style="padding-left:24px">Current earnings (unclosed)</td><td class="num">{{ r.earnings|money }}</td></tr>
+<tr><td><strong>Total equity</strong></td><td class="num"><strong>{{ r.total_equity|money }}</strong></td></tr>
+</tbody><tfoot><tr><td>Total liabilities & equity {% if r.total_liabilities_equity == r.total_assets %}<span class="badge badge-paid">balanced</span>{% endif %}</td><td class="num">{{ r.total_liabilities_equity|money }}</td></tr></tfoot></table></div>
+{% endblock %}

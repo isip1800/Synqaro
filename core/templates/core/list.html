@@ -1,0 +1,34 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="actions">{% block list_actions %}{% if create_url %}<a class="btn btn-primary" href="{{ create_url }}">+ New</a>{% endif %}{% endblock %}</div>
+</div>
+{% if search_enabled or filters %}
+<form class="toolbar" method="get">
+  {% if search_enabled %}<input type="search" name="q" value="{{ q }}" placeholder="Search…">{% endif %}
+  {% for param, label, choices, current in filters %}
+    <select name="{{ param }}" onchange="this.form.submit()">
+      <option value="">{{ label }}: all</option>
+      {% for val, text in choices %}<option value="{{ val }}" {% if current == val|stringformat:"s" %}selected{% endif %}>{{ text }}</option>{% endfor %}
+    </select>
+  {% endfor %}
+  <button class="btn">Filter</button>
+</form>
+{% endif %}
+{% block list_body %}
+<div class="card table-wrap">
+<table class="table">
+  <thead><tr>{% for label, acc in columns %}<th>{{ label }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for obj in object_list %}
+    <tr>{% for label, acc in columns %}<td>{% if forloop.first %}{% cell obj acc True %}{% else %}{% cell obj acc %}{% endif %}</td>{% endfor %}</tr>
+  {% empty %}
+    <tr><td colspan="{{ columns|length }}" class="empty">Nothing here yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}
+{% include "core/_pagination.html" %}
+{% endblock %}

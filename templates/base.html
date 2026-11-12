@@ -1,0 +1,61 @@
+{% load static erp %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ title|default:"Synqaro" }}{% endblock %} · Synqaro ERP</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body>
+{% if user.is_authenticated %}
+<div class="shell">
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="{% url 'dashboard' %}"><span class="logo">S</span> Synqaro</a>
+    <div class="company-name">{{ company.name }}</div>
+    <nav>
+    {% block nav %}
+      {% for section, items in nav %}
+        <div class="nav-section">{{ section }}</div>
+        {% for label, url_name, _ in items %}
+          <a class="nav-link {% nav_active url_name %}" href="{% url url_name %}">{{ label }}</a>
+        {% endfor %}
+      {% endfor %}
+    {% endblock %}
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <button class="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')" aria-label="Menu">☰</button>
+      <div class="topbar-title">{% block heading %}{{ title }}{% endblock %}</div>
+      <div class="topbar-user">
+        {{ user.get_full_name|default:user.username }}
+        {% if user.is_superuser %}· <a href="{% url 'admin:index' %}">Admin</a>{% endif %}
+        · <form method="post" action="{% url 'logout' %}" class="inline">{% csrf_token %}<button class="link">Sign out</button></form>
+      </div>
+    </header>
+    <main class="content">
+      {% if messages %}<div class="messages">{% for m in messages %}<div class="msg msg-{{ m.tags }}">{{ m }}</div>{% endfor %}</div>{% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% else %}
+  {% block anon %}{% endblock %}
+{% endif %}
+<script>
+// Inline formsets: "Add line" clones the empty form template.
+document.querySelectorAll('[data-formset]').forEach(function (fs) {
+  var prefix = fs.dataset.formset;
+  var total = document.getElementById('id_' + prefix + '-TOTAL_FORMS');
+  var tpl = fs.querySelector('template');
+  var btn = fs.querySelector('[data-add-row]');
+  if (!btn || !tpl) return;
+  btn.addEventListener('click', function () {
+    var html = tpl.innerHTML.replace(/__prefix__/g, total.value);
+    fs.querySelector('tbody').insertAdjacentHTML('beforeend', html);
+    total.value = parseInt(total.value, 10) + 1;
+  });
+});
+</script>
+</body>
+</html>

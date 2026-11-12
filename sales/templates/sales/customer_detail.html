@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ object.name }}</h1><div class="sub">{{ object.code }} · {{ object.full_address|default:"no address" }}{% if object.sales_rep %} · Rep: <a href="{{ object.sales_rep.get_absolute_url }}">{{ object.sales_rep }}</a>{% endif %}</div></div>
+  <div class="actions">
+    <a class="btn btn-primary" href="{% url 'sales:salesorder_create' %}?customer={{ object.pk }}">+ Quote / order</a>
+    <a class="btn" href="{% url 'accounting:customerpayment_create' %}?customer={{ object.pk }}">+ Payment</a>
+    <a class="btn" href="{% url 'sales:customer_statement' object.pk %}">Statement</a>
+    <a class="btn" href="{% url 'sales:customer_update' object.pk %}">Edit</a>
+  </div>
+</div>
+<div class="kpis">
+  <div class="kpi"><div class="label">AR balance</div><div class="value">{{ object.balance|money }}</div></div>
+  <div class="kpi"><div class="label">Open orders (uninvoiced)</div><div class="value">{{ object.open_orders_value|money }}</div></div>
+  <div class="kpi {% if object.credit_available is not None and object.credit_available < 0 %}bad{% endif %}"><div class="label">Credit available</div><div class="value">{% if object.credit_limit %}{{ object.credit_available|money }}{% else %}No limit{% endif %}</div><div class="note">{% if object.credit_limit %}Limit {{ object.credit_limit|money }}{% endif %}</div></div>
+  <div class="kpi"><div class="label">Terms / pricing</div><div class="value" style="font-size:17px">{{ object.payment_terms_days }} days</div><div class="note">{{ object.price_list|default:"List prices" }}{% if object.tax_exempt %} · tax exempt{% endif %}</div></div>
+</div>
+<div class="grid-2">
+  <div class="card table-wrap"><h3>Open invoices</h3><table class="table compact"><thead><tr><th>Invoice</th><th>Due</th><th class="num">Balance</th></tr></thead><tbody>
+  {% for i in open_invoices %}<tr><td><a href="{{ i.get_absolute_url }}">{{ i.number }}</a></td><td>{{ i.due_date|date:"Y-m-d" }}{% if i.due_date < today %} <span class="badge badge-overdue">overdue</span>{% endif %}</td><td class="num">{{ i.balance_due|money }}</td></tr>{% empty %}<tr><td colspan="3" class="empty">Nothing open.</td></tr>{% endfor %}
+  </tbody></table></div>
+  <div class="card table-wrap"><h3>Orders</h3><table class="table compact"><thead><tr><th>Order</th><th>Date</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
+  {% for o in orders %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a></td><td>{{ o.order_date|date:"Y-m-d" }}</td><td class="num">{{ o.total|money }}</td><td>{% status_badge o %}</td></tr>{% empty %}<tr><td colspan="4" class="empty">None.</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+<div class="grid-2">
+  <div class="card table-wrap"><h3>Invoice history</h3><table class="table compact"><tbody>
+  {% for i in invoices %}<tr><td><a href="{{ i.get_absolute_url }}">{{ i.number }}</a></td><td>{{ i.invoice_date|date:"Y-m-d" }}</td><td class="num">{{ i.total|money }}</td><td>{% status_badge i %}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}
+  </tbody></table></div>
+  <div class="card table-wrap"><h3>Payments</h3><table class="table compact"><tbody>
+  {% for p in payments %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a></td><td>{{ p.date|date:"Y-m-d" }}</td><td>{{ p.get_method_display }}</td><td class="num">{{ p.amount|money }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+<div class="card"><h3>Contact</h3><dl class="dl-grid">
+  <div><dt>Contact</dt><dd>{{ object.contact_name|default:"—" }}</dd></div><div><dt>Email</dt><dd>{{ object.email|default:"—" }}</dd></div><div><dt>Phone</dt><dd>{{ object.phone|default:"—" }}</dd></div><div><dt>Tax ID</dt><dd>{{ object.tax_id|default:"—" }}</dd></div><div><dt>Ship to</dt><dd>{{ object.shipping_address|default:object.full_address|linebreaksbr }}</dd></div></dl>
+  {% if object.notes %}<p>{{ object.notes|linebreaksbr }}</p>{% endif %}</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% load erp %}
+{{ formset.management_form }}
+{% for e in formset.non_form_errors %}<div class="msg msg-error">{{ e }}</div>{% endfor %}
+<div class="formset" data-formset="{{ formset.prefix }}">
+  <div class="table-wrap">
+  <table class="table lines">
+    <thead><tr>
+      {% for field in formset.empty_form.visible_fields %}<th>{{ field.label }}</th>{% endfor %}
+    </tr></thead>
+    <tbody>
+    {% for f in formset %}
+      <tr>
+        {% for field in f.visible_fields %}<td class="{% if field.errors %}has-error{% endif %}">{% if forloop.first %}{% for h in f.hidden_fields %}{{ h }}{% endfor %}{% endif %}{{ field }}{% for e in field.errors %}<small class="error">{{ e }}</small>{% endfor %}{% if forloop.first %}{% for e in f.non_field_errors %}<small class="error">{{ e }}</small>{% endfor %}{% endif %}</td>{% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <template><tr>{% for field in formset.empty_form.visible_fields %}<td>{% if forloop.first %}{% for h in formset.empty_form.hidden_fields %}{{ h }}{% endfor %}{% endif %}{{ field }}</td>{% endfor %}</tr></template>
+  <button type="button" class="btn" data-add-row>+ Add line</button>
+</div>

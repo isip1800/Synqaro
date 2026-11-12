@@ -1,0 +1,16 @@
+{% extends "portal/base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><div><h1>{{ title }}</h1><div class="sub">Invoices are reviewed by our accounts payable team before approval.</div></div></div>
+<form method="post" class="card">{% csrf_token %}
+  <div class="form-grid">
+    <label class="field"><span>Your invoice number *</span><input name="vendor_invoice_number" required></label>
+    <label class="field"><span>Invoice date</span><input type="date" name="date" value="{{ today|date:'Y-m-d' }}"></label>
+    <label class="field"><span>Notes</span><input name="notes"></label>
+  </div>
+  <div class="table-wrap"><table class="table"><thead><tr><th>Product</th><th class="num">Ordered</th><th class="num">Already invoiced</th><th class="num">Unit price</th><th>Invoice qty</th></tr></thead><tbody>
+  {% for l in lines %}<tr><td>{{ l.product }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.qty_billed|qty }}</td><td class="num">{{ l.unit_price|unitcost }} {{ po.currency }}</td><td><input type="number" step="any" min="0" name="qty_{{ l.pk }}" value="{{ l.remaining|qty }}" style="max-width:140px"></td></tr>{% endfor %}
+  </tbody></table></div>
+  <p class="muted">Pre-filled with the quantity not yet invoiced.</p>
+  <div class="form-actions"><button class="btn btn-primary">Submit invoice</button><a class="btn" href="{% url 'portal:po_detail' po.pk %}">Cancel</a></div>
+</form>
+{% endblock %}
