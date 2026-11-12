@@ -1,13 +1,31 @@
 from django.contrib import admin
 
-from .models import Category, PriceList, PriceListItem, Product, UnitOfMeasure, VendorProduct
+from .models import (
+    HTSCode,
+    ItemClass,
+    LookupValue,
+    PriceList,
+    PriceListItem,
+    Product,
+    ProductCrossReference,
+    ProductWarehouse,
+    UnitOfMeasure,
+    VendorProduct,
+)
 
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ("sku", "name", "category", "list_price", "avg_cost", "is_active")
-    search_fields = ("sku", "name")
-    list_filter = ("category", "is_active")
+    list_display = ("sku", "name", "item_class", "brand", "list_price", "avg_cost", "is_active")
+    search_fields = ("sku", "name", "barcode")
+    list_filter = ("is_active", "brand", "season")
 
 
-admin.site.register([Category, UnitOfMeasure, VendorProduct, PriceList, PriceListItem])
+@admin.register(LookupValue)
+class LookupValueAdmin(admin.ModelAdmin):
+    list_display = ("kind", "code", "description", "is_active")
+    list_filter = ("kind",)
+
+
+admin.site.register([ItemClass, HTSCode, UnitOfMeasure, VendorProduct, PriceList, PriceListItem,
+                     ProductCrossReference, ProductWarehouse])

@@ -16,6 +16,7 @@ for attempt in $(seq 1 30); do
 done
 
 if [ "${SEED_DEMO:-0}" = "1" ]; then
+  python manage.py load_product_setup   # idempotent: sample item classes / lookups / HTS table
   python manage.py seed_demo --if-empty --admin "${ADMIN_USERNAME:-admin}" --password "${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}"
 else
   python manage.py setup_erp --admin "${ADMIN_USERNAME:-admin}" --password "${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}"

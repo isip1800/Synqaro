@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h1>{{ title }}</h1><div class="sub"><a href="{% url 'products:lookup_list' kind %}">{{ kind_label }}</a></div></div></div>
+<form method="post" class="card form-card" style="max-width:640px">{% csrf_token %}
+  {% for e in form.non_field_errors %}<div class="msg msg-error">{{ e }}</div>{% endfor %}
+  <div class="form-grid">{% for field in form.visible_fields %}{% include "core/_field.html" %}{% endfor %}</div>
+  <div class="form-actions"><button class="btn btn-primary">Save</button>{% if not object %}<button class="btn" name="another" value="1">Save & add another</button>{% endif %}<a class="btn" href="{% url 'products:lookup_list' kind %}">Cancel</a></div>
+</form>
+{% endblock %}

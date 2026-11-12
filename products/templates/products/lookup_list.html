@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h1>{{ title }}</h1><div class="sub"><a href="{% url 'products:setup' %}">Product Setup</a> /
+  <select onchange="location=this.value" style="width:auto">{% for k, label in kinds %}<option value="{% url 'products:lookup_list' k %}" {% if k == kind %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div></div>
+  <div class="actions"><a class="btn btn-primary" href="{% url 'products:lookup_create' kind %}">+ New {{ singular }}</a></div></div>
+<form class="toolbar" method="get"><input type="search" name="q" value="{{ q }}" placeholder="Search code or description…"><button class="btn">Search</button></form>
+<div class="card table-wrap"><table class="table"><thead><tr><th>Code</th><th>Description</th><th class="num">Items using</th><th>Active</th><th></th></tr></thead><tbody>
+{% for v, n in rows %}<tr><td><a href="{% url 'products:lookup_update' kind v.pk %}">{{ v.code }}</a></td><td>{{ v.description }}</td><td class="num">{{ n }}</td><td>{% if v.is_active %}✓{% else %}—{% endif %}</td>
+<td>{% if not n %}<form method="post" action="{% url 'products:lookup_delete' kind v.pk %}" class="inline" onsubmit="return confirm('Delete {{ v.code }}?')">{% csrf_token %}<button class="btn btn-sm btn-danger">Delete</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="empty">No values yet.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

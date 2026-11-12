@@ -123,16 +123,20 @@ def estimate_duty(shipment):
     """Create/refresh a customs duty landed cost from product duty rates (HS-code based)."""
     if shipment.status == Shipment.RECEIVED:
         raise ValidationError("Shipment already received; add duty as a landed cost instead.")
-    duty = ZERO
+    duty = tariff = ZERO
     for line in shipment.lines.select_related("po_line__product", "po_line__order"):
         duty += line.value_base * line.po_line.product.duty_rate / 100
-    duty = money(duty)
-    LandedCost.objects.filter(shipment=shipment, cost_type="duty", description="Estimated duty",
-                              capitalized=False).delete()
-    if duty > 0:
-        return LandedCost.objects.create(shipment=shipment, cost_type="duty", description="Estimated duty",
-                                         amount=duty)
-    return None
+        tariff += line.value_base * line.po_line.product.tariff_rate / 100
+    LandedCost.objects.filter(shipment=shipment, cost_type__in=["duty", "tariff"],
+                              description__in=["Estimated duty", "Estimated tariff"], capitalized=False).delete()
+    result = None
+    if money(tariff) > 0:
+        result = LandedCost.objects.create(shipment=shipment, cost_type="tariff", description="Estimated tariff",
+                                           amount=money(tariff))
+    if money(duty) > 0:
+        result = LandedCost.objects.create(shipment=shipment, cost_type="duty", description="Estimated duty",
+                                           amount=money(duty))
+    return result
 
 
 @transaction.atomic

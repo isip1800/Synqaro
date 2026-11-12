@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><div><h1>Item Classes</h1><div class="sub">Tier 1 Class → Tier 2 Subclass → Tier 3 Product Type. Items are assigned to a Tier 3 product type.</div></div>
+<div class="actions"><a class="btn btn-primary" href="{% url 'products:itemclass_create' %}">+ New Tier 1 class</a></div></div>
+<div class="card table-wrap"><table class="table"><thead><tr><th>Code</th><th>Description</th><th>Tier</th><th class="num">Items</th><th></th></tr></thead><tbody>
+{% for t1, subs in tree %}
+  <tr class="tree-1"><td><a href="{% url 'products:itemclass_update' t1.pk %}">{{ t1.code }}</a>{% if not t1.is_active %} <span class="badge">inactive</span>{% endif %}</td><td>{{ t1.description }}</td><td>Tier 1 — Class</td><td></td><td><a class="btn btn-sm" href="{% url 'products:itemclass_create' %}?parent={{ t1.pk }}">+ Subclass</a></td></tr>
+  {% for t2, types in subs %}
+    <tr class="tree-2"><td><a href="{% url 'products:itemclass_update' t2.pk %}">{{ t1.code }} -{{ t2.code }}</a></td><td>{{ t2.description }}</td><td>Tier 2 — Subclass</td><td></td><td><a class="btn btn-sm" href="{% url 'products:itemclass_create' %}?parent={{ t2.pk }}">+ Product type</a></td></tr>
+    {% for t3 in types %}<tr class="tree-3"><td><a href="{% url 'products:itemclass_update' t3.pk %}">{{ t3.full_code }}</a></td><td>{{ t3.description }}</td><td>Tier 3 — Product type</td><td class="num">{% with n=counts|get_item:t3.pk %}{% if n %}<a href="{% url 'products:product_list' %}?item_class={{ t3.pk }}">{{ n }}</a>{% else %}0{% endif %}{% endwith %}</td><td></td></tr>{% endfor %}
+  {% endfor %}
+{% empty %}<tr><td colspan="5" class="empty">No item classes yet. Start with a Tier 1 class (e.g. BABY, HOME, INT).</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

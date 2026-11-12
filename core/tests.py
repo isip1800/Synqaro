@@ -9,13 +9,13 @@ from django.urls import URLResolver, get_resolver
 from accounting.models import Account, CustomerInvoice, CustomerPayment, JournalEntry, VendorBill, VendorPayment
 from accounting.services import trial_balance
 from inventory.models import StockAdjustment, StockTransfer, Warehouse
-from products.models import Category, PriceList, Product
+from products.models import PriceList, Product
 from purchasing.models import GoodsReceipt, PurchaseOrder, Shipment, Vendor
 from sales.models import Customer, Delivery, SalesOrder
 from salesteam.models import SalesRep
 
 DETAIL_MODELS = {
-    "products/items/": Product, "products/categories/": Category, "products/price-lists/": PriceList,
+    "products/items/": Product, "products/price-lists/": PriceList,
     "inventory/warehouses/": Warehouse, "inventory/adjustments/": StockAdjustment,
     "inventory/transfers/": StockTransfer, "purchasing/vendors/": Vendor, "purchasing/orders/": PurchaseOrder,
     "purchasing/shipments/": Shipment, "purchasing/receipts/": GoodsReceipt, "sales/customers/": Customer,
@@ -50,6 +50,8 @@ class SmokeTests(TestCase):
         for route, p in walk(get_resolver().url_patterns):
             if route.startswith(("admin", "portal/", "login", "logout", "media")):
                 continue
+            if route.endswith(("import/",)):
+                continue  # POST-only
             if "<" not in route:
                 urls = ["/" + route]
             elif route.endswith(("<int:pk>/", "<int:pk>/edit/", "<int:pk>/statement/", "<int:pk>/receive/",

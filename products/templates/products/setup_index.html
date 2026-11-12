@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h1>Product Setup</h1><div class="sub">Lists used on the Stock Item screen. Each list is edited separately.</div></div></div>
+<div class="grid-3">
+  <a class="card" href="{% url 'products:itemclass_list' %}"><h3>Item Classes</h3><p class="muted">Tier 1 Class → Tier 2 Subclass → Tier 3 Product Type · {{ item_classes }} entries</p></a>
+  <a class="card" href="{% url 'products:htscode_list' %}"><h3>HTS Codes</h3><p class="muted">HTS, duty & tariff by item class + material + gender · {{ hts_count }} rows{% if hts_waiting %}, {{ hts_waiting }} waiting on info{% endif %}</p></a>
+  {% for kind, label, n in kinds %}<a class="card" href="{% url 'products:lookup_list' kind %}"><h3>{{ label }}</h3><p class="muted">{{ n }} value{{ n|pluralize }}</p></a>{% endfor %}
+  <a class="card" href="{% url 'products:unitofmeasure_list' %}"><h3>Units of Measure</h3><p class="muted">{{ uom_count }} units</p></a>
+  <a class="card" href="{% url 'products:vendorproduct_list' %}"><h3>Vendor Prices</h3><p class="muted">Vendor SKUs, costs, MOQ, lead times</p></a>
+  <a class="card" href="{% url 'core:company' %}"><h3>UPC & Container Settings</h3><p class="muted">UPC company prefix, next UPC number, container CBM capacities</p></a>
+</div>
+{% endblock %}

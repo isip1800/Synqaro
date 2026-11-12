@@ -1,0 +1,69 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><h1>{{ title }}</h1>
+  <div class="actions"><a class="btn" href="{% url 'products:setup' %}" target="_blank">Product setup ↗</a></div></div>
+<form method="post" class="card form-card" id="product-form">
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<div class="msg msg-error">{{ e }}</div>{% endfor %}
+  {% if form.errors %}<div class="msg msg-error">Please fix the highlighted fields.</div>{% endif %}
+  {% for title, fields in sections %}
+    <h3>{{ title }}</h3>
+    <div class="form-grid">
+      {% for field in fields %}
+        <label class="field {% if field.errors %}has-error{% endif %} {% if field.field.widget.input_type == 'checkbox' %}checkbox{% endif %}">
+          <span>{{ field.label }}{% if field.field.required %} *{% endif %}</span>
+          {% if field.name in lookup_kinds or field.name == 'label1' or field.name == 'label2' or field.name == 'item_class' %}
+            <span class="field-with-link">{{ field }}
+              <a class="btn btn-sm" target="_blank" title="Edit list"
+                 href="{% if field.name == 'item_class' %}{% url 'products:itemclass_list' %}{% elif field.name == 'label1' or field.name == 'label2' %}{% url 'products:lookup_list' 'label' %}{% else %}{% url 'products:lookup_list' field.name %}{% endif %}">✎</a></span>
+          {% else %}{{ field }}{% endif %}
+          {% if field.help_text %}<small class="muted">{{ field.help_text }}</small>{% endif %}
+          {% for e in field.errors %}<small class="error">{{ e }}</small>{% endfor %}
+        </label>
+      {% endfor %}
+    </div>
+    {% if title == "Packaging & container" %}
+    <div class="calc" style="margin-bottom:16px">
+      <strong>Container calculator</strong> <span class="muted">(full cartons; capacities set in Settings → Company)</span>
+      <table class="table compact" style="margin-top:6px"><thead><tr><th>Carton CBM</th><th>Carton CUFT</th>{% for label, cbm in containers %}<th class="num">Qty per {{ label }} <span class="muted">({{ cbm|floatformat:0 }} CBM)</span></th>{% endfor %}</tr></thead>
+      <tbody><tr><td id="calc-cbm">—</td><td id="calc-cuft">—</td>{% for label, cbm in containers %}<td class="num calc-ctr" data-cbm="{{ cbm }}">—</td>{% endfor %}</tr></tbody></table>
+    </div>
+    {% endif %}
+  {% endfor %}
+  {% for title, formset in formsets %}
+    <h3>{{ title }}</h3>
+    {% with formset=formset %}{% include "core/_formset.html" %}{% endwith %}
+  {% endfor %}
+  <div class="form-actions">
+    <button class="btn btn-primary">Save item</button>
+    <a class="btn" href="{% if product %}{{ product.get_absolute_url }}{% else %}{% url 'products:product_list' %}{% endif %}">Cancel</a>
+  </div>
+</form>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var CBM_PER_IN3 = 0.000016387064, CUFT_PER_CBM = 35.3146667;
+  function num(id) { var v = parseFloat(($(id) || {}).value); return isNaN(v) ? 0 : v; }
+  function calc() {
+    var l = num('id_carton_length'), w = num('id_carton_width'), h = num('id_carton_height');
+    var unit = ($('id_dimension_unit') || {}).value, qty = Math.max(num('id_carton_qty'), 0);
+    var cbm = num('id_carton_cbm');
+    if (l && w && h) {
+      cbm = l * w * h * (unit === 'cm' ? 0.000001 : CBM_PER_IN3);
+      $('id_carton_cbm').value = cbm.toFixed(4);
+    }
+    $('calc-cbm').textContent = cbm ? cbm.toFixed(4) : '—';
+    $('calc-cuft').textContent = cbm ? (cbm * CUFT_PER_CBM).toFixed(4) : '—';
+    document.querySelectorAll('.calc-ctr').forEach(function (td) {
+      if (!cbm) { td.textContent = '—'; return; }
+      var cartons = Math.floor(parseFloat(td.dataset.cbm) / cbm);
+      td.textContent = (cartons * qty).toLocaleString() + ' (' + cartons.toLocaleString() + ' ctns)';
+    });
+    if (cbm && qty && $('id_volume_cbm')) $('id_volume_cbm').value = (cbm / qty).toFixed(6);
+  }
+  ['id_carton_length', 'id_carton_width', 'id_carton_height', 'id_dimension_unit', 'id_carton_qty', 'id_carton_cbm']
+    .forEach(function (id) { var el = $(id); if (el) { el.addEventListener('input', calc); el.addEventListener('change', calc); } });
+  calc();
+})();
+</script>
+{% endblock %}
