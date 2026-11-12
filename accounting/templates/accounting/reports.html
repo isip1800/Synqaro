@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><h1>Financial Reports</h1></div>
+<div class="grid-3">
+  <a class="card" href="{% url 'accounting:income_statement' %}"><h3>Profit & Loss</h3><p class="muted">Revenue, COGS (incl. landed costs & variances), gross profit and operating expenses for a period.</p></a>
+  <a class="card" href="{% url 'accounting:balance_sheet' %}"><h3>Balance Sheet</h3><p class="muted">Assets, liabilities and equity as of a date, including current-period earnings.</p></a>
+  <a class="card" href="{% url 'accounting:trial_balance' %}"><h3>Trial Balance</h3><p class="muted">Debit / credit balance of every account.</p></a>
+  <a class="card" href="{% url 'accounting:ar_aging' %}"><h3>AR Aging</h3><p class="muted">Open customer invoices by days past due.</p></a>
+  <a class="card" href="{% url 'accounting:ap_aging' %}"><h3>AP Aging</h3><p class="muted">Open vendor bills by days past due, in base currency.</p></a>
+  <a class="card" href="{% url 'inventory:stock' %}"><h3>Inventory Valuation</h3><p class="muted">On-hand stock at moving-average landed cost.</p></a>
+  <a class="card" href="{% url 'salesteam:performance' %}"><h3>Sales Performance</h3><p class="muted">Revenue, margin and target attainment by sales person.</p></a>
+  <a class="card" href="{% url 'accounting:account_list' %}"><h3>General Ledger</h3><p class="muted">Open any account to see its detailed ledger.</p></a>
+</div>
+{% endblock %}

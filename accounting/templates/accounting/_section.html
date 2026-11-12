@@ -1,0 +1,1 @@
+{% load erp %}{% for r in rows %}<tr><td style="padding-left:24px"><a href="{{ r.account.get_absolute_url }}">{{ r.account }}</a></td><td class="num">{{ r.amount|money }}</td></tr>{% empty %}<tr><td style="padding-left:24px" class="muted">None</td><td></td></tr>{% endfor %}

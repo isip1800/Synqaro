@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><h1>Trial Balance</h1><div class="actions"><button class="btn" onclick="window.print()">Print</button></div></div>
+<form class="toolbar" method="get"><label>As of <input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}"></label><button class="btn">Run</button></form>
+<div class="card table-wrap"><table class="table"><thead><tr><th>Account</th><th>Type</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody>
+{% for r in tb.rows %}<tr><td><a href="{{ r.account.get_absolute_url }}">{{ r.account }}</a></td><td>{{ r.account.get_account_type_display }}</td><td class="num">{% if r.debit %}{{ r.debit|money }}{% endif %}</td><td class="num">{% if r.credit %}{{ r.credit|money }}{% endif %}</td></tr>{% empty %}<tr><td colspan="4" class="empty">No postings yet.</td></tr>{% endfor %}
+</tbody><tfoot><tr><td colspan="2">Totals {% if tb.total_debit == tb.total_credit %}<span class="badge badge-paid">balanced</span>{% else %}<span class="badge badge-void">out of balance</span>{% endif %}</td><td class="num">{{ tb.total_debit|money }}</td><td class="num">{{ tb.total_credit|money }}</td></tr></tfoot></table></div>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Purchase order {{ object.number }} {% status_badge object %}</h1>
+    <div class="sub"><a href="{{ object.vendor.get_absolute_url }}">{{ object.vendor }}</a> · {{ object.order_date|date:"Y-m-d" }} · {{ object.currency }}{% if object.currency_id != base %} @ {{ object.exchange_rate }}{% endif %}{% if object.incoterm %} · {{ object.incoterm }}{% endif %} · to {{ object.warehouse.code }}</div></div>
+  <div class="actions">
+    {% if object.status in 'draft,sent' %}<a class="btn" href="{% url 'purchasing:purchaseorder_update' object.pk %}">Edit</a>{% endif %}
+    {% if object.status == 'draft' %}<form method="post" action="{% url 'purchasing:po_send' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Mark sent to vendor</button></form>{% endif %}
+    {% if object.status in 'sent,confirmed,partial' %}
+      <form method="post" action="{% url 'purchasing:po_create_shipment' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Book import shipment</button></form>
+      <a class="btn" href="{% url 'purchasing:po_receive' object.pk %}">Receive directly</a>
+    {% endif %}
+    <button class="btn" onclick="window.print()">Print</button>
+    {% if object.status in 'draft,sent,confirmed' %}<form method="post" action="{% url 'purchasing:po_cancel' object.pk %}" onsubmit="return confirm('Cancel this PO?')">{% csrf_token %}<button class="btn btn-danger">Cancel</button></form>{% endif %}
+    {% if object.status in 'partial,received' %}<form method="post" action="{% url 'purchasing:po_close' object.pk %}">{% csrf_token %}<button class="btn">Close PO</button></form>{% endif %}
+  </div>
+</div>
+<div class="card table-wrap"><table class="table">
+<thead><tr><th>Product</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th><th class="num">On shipments</th><th class="num">Received</th><th class="num">Billed</th></tr></thead><tbody>
+{% for l in lines %}<tr><td><a href="{{ l.product.get_absolute_url }}">{{ l.product.sku }}</a></td><td>{{ l.description|default:l.product.name }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|unitcost }}</td><td class="num">{{ l.amount|money }}</td><td class="num">{{ l.qty_on_shipments|qty }}</td><td class="num">{{ l.qty_received|qty }}</td><td class="num">{{ l.qty_billed|qty }}</td></tr>{% endfor %}
+</tbody>
+<tfoot><tr><td colspan="4">Total {{ object.currency }}</td><td class="num">{{ object.total|money }}</td><td colspan="3">{% if object.currency_id != base %}≈ {{ object.total_base|money }} {{ base }}{% endif %}</td></tr></tfoot>
+</table></div>
+<div class="grid-2">
+  <div class="card">
+    <h3>Vendor confirmation</h3>
+    {% if object.vendor_confirmed_at %}
+      <dl class="dl-grid"><div><dt>Confirmed</dt><dd>{{ object.vendor_confirmed_at|date:"Y-m-d H:i" }}</dd></div><div><dt>Ready / ship date</dt><dd>{{ object.vendor_confirmed_ship_date|date:"Y-m-d"|default:"—" }}</dd></div><div><dt>Vendor ref.</dt><dd>{{ object.vendor_reference|default:"—" }}</dd></div></dl>
+      {% if object.vendor_notes %}<p>{{ object.vendor_notes }}</p>{% endif %}
+    {% elif object.status == 'sent' %}
+      <p class="muted">Waiting for the vendor to confirm via the portal. You can also confirm on their behalf:</p>
+      <form method="post" action="{% url 'purchasing:po_confirm' object.pk %}" class="inline-form">{% csrf_token %}
+        <label class="field"><span>Ship date</span><input type="date" name="ship_date"></label>
+        <label class="field"><span>Vendor ref.</span><input name="vendor_reference"></label>
+        <label class="field"><span>Notes</span><input name="notes"></label>
+        <button class="btn">Confirm</button></form>
+    {% else %}<p class="muted">Not yet sent.</p>{% endif %}
+  </div>
+  <div class="card">
+    <h3>Bill this PO</h3>
+    {% if object.status in 'sent,confirmed,partial,received' %}
+    <p class="muted">Creates a draft bill for received-but-unbilled quantities at PO prices.</p>
+    <form method="post" action="{% url 'purchasing:po_create_bill' object.pk %}" class="inline-form">{% csrf_token %}
+      <label class="field"><span>Vendor invoice #</span><input name="vendor_invoice_number" required></label>
+      <label class="field"><span>Bill date</span><input type="date" name="bill_date" value="{{ today|date:'Y-m-d' }}"></label>
+      <button class="btn">Create draft bill</button></form>
+    {% else %}<p class="muted">Available once the PO is sent.</p>{% endif %}
+  </div>
+</div>
+<div class="grid-3">
+  <div class="card table-wrap"><h3>Shipments</h3><table class="table compact"><tbody>
+  {% for s in shipments %}<tr><td><a href="{{ s.get_absolute_url }}">{{ s.number }}</a></td><td>{% status_badge s %}</td><td>ETA {{ s.eta|date:"Y-m-d"|default:"—" }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div>
+  <div class="card table-wrap"><h3>Receipts</h3><table class="table compact"><tbody>
+  {% for r in receipts %}<tr><td><a href="{{ r.get_absolute_url }}">{{ r.number }}</a></td><td>{{ r.date|date:"Y-m-d" }}</td><td class="num">{{ r.total_value|money }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div>
+  <div class="card table-wrap"><h3>Bills</h3><table class="table compact"><tbody>
+  {% for b in bills %}<tr><td><a href="{{ b.get_absolute_url }}">{{ b.number }}</a></td><td>{% status_badge b %}</td><td class="num">{{ b.total|money }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div>
+</div>
+{% if object.payment_terms or object.notes %}<div class="card"><h3>Terms & notes</h3>{% if object.payment_terms %}<p><strong>Payment terms:</strong> {{ object.payment_terms }}</p>{% endif %}{{ object.notes|linebreaksbr }}</div>{% endif %}
+{% endblock %}

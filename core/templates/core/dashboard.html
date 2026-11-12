@@ -1,0 +1,44 @@
+{% extends "base.html" %}{% load erp %}
+{% block title %}Dashboard{% endblock %}
+{% block heading %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Good day{% if user.first_name %}, {{ user.first_name }}{% endif %}</h1><div class="sub">{{ today|date:"l, F j, Y" }}</div></div>
+  <div class="actions">
+    <a class="btn btn-primary" href="{% url 'sales:salesorder_create' %}">+ Sales order</a>
+    <a class="btn" href="{% url 'purchasing:purchaseorder_create' %}">+ Purchase order</a>
+    <a class="btn" href="{% url 'purchasing:shipment_create' %}">+ Shipment</a>
+  </div>
+</div>
+<div class="kpis">
+  <div class="kpi"><div class="label">Sales this month</div><div class="value">{{ sales_mtd|money }}</div><div class="note">Gross margin {{ margin_mtd|money }}{% if margin_pct is not None %} · {{ margin_pct|pct }}{% endif %}</div></div>
+  <div class="kpi"><div class="label">Receivables open</div><div class="value">{{ ar_total|money }}</div><div class="note"><a href="{% url 'accounting:ar_aging' %}">AR aging →</a></div></div>
+  <div class="kpi {% if overdue_count %}bad{% endif %}"><div class="label">Overdue invoices</div><div class="value">{{ overdue_total|money }}</div><div class="note">{{ overdue_count }} invoice{{ overdue_count|pluralize }}</div></div>
+  <div class="kpi"><div class="label">Payables open</div><div class="value">{{ ap_total|money }}</div><div class="note">Due within 7 days: {{ ap_due_week|money }}</div></div>
+  <div class="kpi"><div class="label">Inventory value</div><div class="value">{{ inv_value|money }}</div><div class="note">At average landed cost</div></div>
+  <div class="kpi"><div class="label">Open POs</div><div class="value">{{ open_pos }}</div><div class="note">{{ quotes }} open quote{{ quotes|pluralize }}</div></div>
+</div>
+<div class="grid-2">
+  <div class="card table-wrap">
+    <div class="section-title" style="padding:14px 16px 0"><h3>Inbound shipments</h3><a href="{% url 'purchasing:shipment_list' %}">All →</a></div>
+    <table class="table compact"><thead><tr><th>Shipment</th><th>Vendor</th><th>Status</th><th>ETA</th></tr></thead><tbody>
+    {% for s in shipments %}<tr><td><a href="{{ s.get_absolute_url }}">{{ s.number }}</a></td><td>{{ s.vendor|default:"—" }}</td><td>{% status_badge s %}</td><td>{{ s.eta|date:"Y-m-d"|default:"—" }}{% if s.eta and s.eta < today and s.status != 'cleared' %} <span class="badge badge-overdue">late</span>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="4" class="empty">No shipments in transit.</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+  <div class="card table-wrap">
+    <div class="section-title" style="padding:14px 16px 0"><h3>Orders waiting to ship</h3><a href="{% url 'sales:salesorder_list' %}">All →</a></div>
+    <table class="table compact"><thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Requested</th></tr></thead><tbody>
+    {% for o in orders_to_ship %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a></td><td>{{ o.customer }}</td><td>{% status_badge o %}</td><td>{{ o.requested_date|date:"Y-m-d"|default:"—" }}</td></tr>
+    {% empty %}<tr><td colspan="4" class="empty">Nothing to ship.</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+</div>
+<div class="card table-wrap">
+  <div class="section-title" style="padding:14px 16px 0"><h3>Low stock ({{ low_stock_count }})</h3><a href="{% url 'inventory:reorder' %}">Reorder report →</a></div>
+  <table class="table compact"><thead><tr><th>Product</th><th class="num">On hand</th><th class="num">On order</th><th class="num">Reorder point</th><th>Preferred vendor</th></tr></thead><tbody>
+  {% for p in low_stock %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p }}</a></td><td class="num">{{ p.qty_on_hand|qty }}</td><td class="num">{{ p.qty_on_order|qty }}</td><td class="num">{{ p.reorder_point|qty }}</td><td>{{ p.preferred_vendor|default:"—" }}</td></tr>
+  {% empty %}<tr><td colspan="5" class="empty">All stock above reorder points.</td></tr>{% endfor %}
+  </tbody></table>
+</div>
+{% endblock %}

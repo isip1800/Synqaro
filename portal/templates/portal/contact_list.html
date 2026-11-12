@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h1>Vendor Portal Users</h1><div class="sub">Suppliers sign in at the same login page and only see their own POs, shipments and invoices.</div></div><div class="actions"><a class="btn btn-primary" href="{% url 'portal:contact_create' %}">+ Portal user</a></div></div>
+<div class="card table-wrap"><table class="table"><thead><tr><th>Username</th><th>Name</th><th>Vendor</th><th>Title</th><th>Can invoice</th><th>Last login</th><th>Active</th><th></th></tr></thead><tbody>
+{% for c in contacts %}<tr><td>{{ c.user.username }}</td><td>{{ c.user.get_full_name }}</td><td><a href="{{ c.vendor.get_absolute_url }}">{{ c.vendor }}</a></td><td>{{ c.title }}</td><td>{% if c.can_submit_invoices %}✓{% endif %}</td><td>{{ c.user.last_login|date:"Y-m-d H:i"|default:"never" }}</td><td>{% if c.user.is_active %}✓{% else %}—{% endif %}</td><td><form method="post" action="{% url 'portal:contact_toggle' c.pk %}">{% csrf_token %}<button class="btn btn-sm">{% if c.user.is_active %}Disable{% else %}Enable{% endif %}</button></form></td></tr>
+{% empty %}<tr><td colspan="8" class="empty">No portal users yet.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

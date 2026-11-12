@@ -1,0 +1,8 @@
+{% extends "core/list.html" %}{% load erp %}
+{% block list_body %}
+<div class="card table-wrap"><table class="table">
+<thead><tr><th>Code</th><th>Name</th><th>City</th><th>Sales person</th><th>Price list</th><th class="num">Credit limit</th><th>Terms</th></tr></thead><tbody>
+{% for c in object_list %}<tr><td><a href="{{ c.get_absolute_url }}">{{ c.code }}</a></td><td>{{ c.name }}{% if not c.is_active %} <span class="badge">inactive</span>{% endif %}</td><td>{{ c.city|default:"—" }}</td><td>{{ c.sales_rep|default:"—" }}</td><td>{{ c.price_list|default:"List" }}</td><td class="num">{% if c.credit_limit %}{{ c.credit_limit|money }}{% else %}—{% endif %}</td><td>{{ c.payment_terms_days }}d</td></tr>
+{% empty %}<tr><td colspan="7" class="empty">No customers yet.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

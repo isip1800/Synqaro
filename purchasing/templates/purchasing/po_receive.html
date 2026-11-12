@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><div><h1>{{ title }}</h1><div class="sub">Direct receipt (no import shipment / landed costs) into {{ po.warehouse }}</div></div></div>
+<form method="post" class="card">{% csrf_token %}
+  <label class="field" style="max-width:220px"><span>Receipt date</span><input type="date" name="date" value="{{ today|date:'Y-m-d' }}"></label>
+  <div class="table-wrap"><table class="table"><thead><tr><th>Product</th><th class="num">Ordered</th><th class="num">Received</th><th class="num">Open</th><th>Receive now</th></tr></thead><tbody>
+  {% for l in lines %}<tr><td>{{ l.product }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.qty_received|qty }}</td><td class="num">{{ l.qty_open|qty }}</td><td><input type="number" step="any" min="0" name="qty_{{ l.pk }}" value="{% if l.qty_open > 0 %}{{ l.qty_open|qty }}{% else %}0{% endif %}" style="max-width:140px"></td></tr>{% endfor %}
+  </tbody></table></div>
+  <div class="form-actions"><button class="btn btn-primary">Post receipt</button><a class="btn" href="{{ po.get_absolute_url }}">Cancel</a></div>
+</form>
+{% endblock %}

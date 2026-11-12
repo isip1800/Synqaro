@@ -1,0 +1,67 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ object.sku }} — {{ object.name }}</h1><div class="sub">{{ object.category|default:"Uncategorized" }}{% if not object.is_active %} · inactive{% endif %}</div></div>
+  <div class="actions">
+    <a class="btn" href="{% url 'products:vendorproduct_create' %}?product={{ object.pk }}">+ Vendor price</a>
+    <a class="btn" href="{% url 'products:product_update' object.pk %}">Edit</a>
+  </div>
+</div>
+<div class="kpis">
+  <div class="kpi"><div class="label">On hand</div><div class="value">{{ object.qty_on_hand|qty }}</div><div class="note">{{ object.uom|default:"" }}</div></div>
+  <div class="kpi"><div class="label">Reserved</div><div class="value">{{ object.qty_reserved|qty }}</div><div class="note">Confirmed orders</div></div>
+  <div class="kpi"><div class="label">Available</div><div class="value">{{ object.qty_available|qty }}</div></div>
+  <div class="kpi"><div class="label">On order</div><div class="value">{{ object.qty_on_order|qty }}</div><div class="note">Open POs</div></div>
+  <div class="kpi"><div class="label">Avg landed cost</div><div class="value">{{ object.avg_cost|unitcost }}</div><div class="note">Value {{ object.inventory_value|money }}</div></div>
+  <div class="kpi"><div class="label">List price</div><div class="value">{{ object.list_price|money }}</div><div class="note">Margin {{ object.margin_pct|pct }}</div></div>
+</div>
+<div class="grid-2">
+  <div class="card">
+    <h3>Import & customs</h3>
+    <dl class="dl-grid">
+      <div><dt>HS code</dt><dd>{{ object.hs_code|default:"—" }}</dd></div>
+      <div><dt>Country of origin</dt><dd>{{ object.country_of_origin|default:"—" }}</dd></div>
+      <div><dt>Duty rate</dt><dd>{{ object.duty_rate|pct }}</dd></div>
+      <div><dt>Weight</dt><dd>{{ object.weight_kg|qty }} kg</dd></div>
+      <div><dt>Volume</dt><dd>{{ object.volume_cbm }} m³</dd></div>
+      <div><dt>Units / carton</dt><dd>{{ object.units_per_carton }}</dd></div>
+      <div><dt>Barcode</dt><dd>{{ object.barcode|default:"—" }}</dd></div>
+      <div><dt>Standard cost</dt><dd>{{ object.standard_cost|unitcost }}</dd></div>
+    </dl>
+  </div>
+  <div class="card">
+    <h3>Replenishment</h3>
+    <dl class="dl-grid">
+      <div><dt>Preferred vendor</dt><dd>{% if object.preferred_vendor %}<a href="{{ object.preferred_vendor.get_absolute_url }}">{{ object.preferred_vendor }}</a>{% else %}—{% endif %}</dd></div>
+      <div><dt>Reorder point</dt><dd>{{ object.reorder_point|qty }}</dd></div>
+      <div><dt>Reorder qty</dt><dd>{{ object.reorder_qty|qty }}</dd></div>
+      <div><dt>Lead time</dt><dd>{{ object.lead_time_days }} days</dd></div>
+    </dl>
+    {% if object.description %}<p>{{ object.description|linebreaksbr }}</p>{% endif %}
+  </div>
+</div>
+<div class="grid-2">
+  <div class="card table-wrap"><h3>Stock by warehouse</h3>
+    <table class="table compact"><thead><tr><th>Warehouse</th><th class="num">Qty</th></tr></thead><tbody>
+    {% for q in quants %}<tr><td>{{ q.warehouse }}</td><td class="num">{{ q.quantity|qty }}</td></tr>{% empty %}<tr><td colspan="2" class="empty">No stock.</td></tr>{% endfor %}
+    </tbody></table></div>
+  <div class="card table-wrap"><h3>Vendor prices</h3>
+    <table class="table compact"><thead><tr><th>Vendor</th><th>Vendor SKU</th><th class="num">Cost</th><th class="num">MOQ</th><th class="num">Lead</th></tr></thead><tbody>
+    {% for v in vendor_prices %}<tr><td><a href="{% url 'products:vendorproduct_update' v.pk %}">{{ v.vendor }}</a></td><td>{{ v.vendor_sku|default:"—" }}</td><td class="num">{{ v.unit_cost|unitcost }} {{ v.currency }}</td><td class="num">{{ v.moq|qty }}</td><td class="num">{{ v.lead_time_days }}d</td></tr>{% empty %}<tr><td colspan="5" class="empty">No vendor prices.</td></tr>{% endfor %}
+    </tbody></table></div>
+</div>
+<div class="grid-2">
+  <div class="card table-wrap"><h3>Open purchase orders</h3>
+    <table class="table compact"><thead><tr><th>PO</th><th>Vendor</th><th class="num">Open qty</th><th>Expected</th></tr></thead><tbody>
+    {% for l in open_po_lines %}<tr><td><a href="{{ l.order.get_absolute_url }}">{{ l.order.number }}</a></td><td>{{ l.order.vendor }}</td><td class="num">{{ l.qty_open|qty }}</td><td>{{ l.order.expected_date|date:"Y-m-d"|default:"—" }}</td></tr>{% empty %}<tr><td colspan="4" class="empty">None.</td></tr>{% endfor %}
+    </tbody></table></div>
+  <div class="card table-wrap"><h3>Price list tiers</h3>
+    <table class="table compact"><thead><tr><th>Price list</th><th class="num">Min qty</th><th class="num">Price</th></tr></thead><tbody>
+    {% for t in price_tiers %}<tr><td><a href="{{ t.price_list.get_absolute_url }}">{{ t.price_list }}</a></td><td class="num">{{ t.min_qty|qty }}</td><td class="num">{{ t.price|money }}</td></tr>{% empty %}<tr><td colspan="3" class="empty">List price only.</td></tr>{% endfor %}
+    </tbody></table></div>
+</div>
+<div class="card table-wrap"><h3>Recent stock moves</h3>
+  <table class="table compact"><thead><tr><th>Date</th><th>Type</th><th>Warehouse</th><th>Reference</th><th class="num">Qty</th><th class="num">Unit cost</th></tr></thead><tbody>
+  {% for m in moves %}<tr><td>{{ m.date|date:"Y-m-d" }}</td><td>{{ m.get_move_type_display }}</td><td>{{ m.warehouse.code }}</td><td>{{ m.reference }}</td><td class="num">{{ m.quantity|qty }}</td><td class="num">{{ m.unit_cost|unitcost }}</td></tr>{% empty %}<tr><td colspan="6" class="empty">No movements.</td></tr>{% endfor %}
+  </tbody></table></div>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ object.name }}</h1><div class="sub">{{ object.code }} · {{ object.get_vendor_type_display }} · {{ object.full_address|default:"no address" }}</div></div>
+  <div class="actions">
+    <a class="btn btn-primary" href="{% url 'purchasing:purchaseorder_create' %}?vendor={{ object.pk }}">+ Purchase order</a>
+    <a class="btn" href="{% url 'accounting:vendorbill_create' %}?vendor={{ object.pk }}&currency={{ object.currency_id }}">+ Bill</a>
+    <a class="btn" href="{% url 'accounting:vendorpayment_create' %}?vendor={{ object.pk }}&currency={{ object.currency_id }}">+ Payment</a>
+    <a class="btn" href="{% url 'portal:contact_create' %}?vendor={{ object.pk }}">+ Portal user</a>
+    <a class="btn" href="{% url 'purchasing:vendor_update' object.pk %}">Edit</a>
+  </div>
+</div>
+<div class="kpis">
+  <div class="kpi"><div class="label">Payable balance (base)</div><div class="value">{{ object.balance|money }}</div></div>
+  <div class="kpi"><div class="label">Currency / terms</div><div class="value">{{ object.currency }}</div><div class="note">{{ object.payment_terms_days }} days{% if object.default_incoterm %} · {{ object.default_incoterm }}{% endif %}</div></div>
+  <div class="kpi"><div class="label">Contact</div><div class="value" style="font-size:15px">{{ object.contact_name|default:"—" }}</div><div class="note">{{ object.email }} {{ object.phone }}</div></div>
+</div>
+<div class="grid-2">
+  <div class="card table-wrap"><h3>Purchase orders</h3><table class="table compact"><thead><tr><th>PO</th><th>Date</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
+  {% for o in orders %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a></td><td>{{ o.order_date|date:"Y-m-d" }}</td><td class="num">{{ o.total|money }} {{ o.currency }}</td><td>{% status_badge o %}</td></tr>{% empty %}<tr><td colspan="4" class="empty">None.</td></tr>{% endfor %}
+  </tbody></table></div>
+  <div class="card table-wrap"><h3>Bills</h3><table class="table compact"><thead><tr><th>Bill</th><th>Vendor inv.</th><th>Due</th><th class="num">Balance</th><th>Status</th></tr></thead><tbody>
+  {% for b in bills %}<tr><td><a href="{{ b.get_absolute_url }}">{{ b.number }}</a></td><td>{{ b.vendor_invoice_number }}</td><td>{{ b.due_date|date:"Y-m-d"|default:"—" }}</td><td class="num">{{ b.balance_due|money }} {{ b.currency }}</td><td>{% status_badge b %}</td></tr>{% empty %}<tr><td colspan="5" class="empty">None.</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+<div class="grid-2">
+  <div class="card table-wrap"><h3>Shipments</h3><table class="table compact"><thead><tr><th>Shipment</th><th>B/L</th><th>ETA</th><th>Status</th></tr></thead><tbody>
+  {% for s in shipments %}<tr><td><a href="{{ s.get_absolute_url }}">{{ s.number }}</a></td><td>{{ s.bill_of_lading|default:"—" }}</td><td>{{ s.eta|date:"Y-m-d"|default:"—" }}</td><td>{% status_badge s %}</td></tr>{% empty %}<tr><td colspan="4" class="empty">None.</td></tr>{% endfor %}
+  </tbody></table></div>
+  <div class="card table-wrap"><h3>Products supplied</h3><table class="table compact"><thead><tr><th>Product</th><th>Vendor SKU</th><th class="num">Cost</th></tr></thead><tbody>
+  {% for vp in vendor_products %}<tr><td><a href="{{ vp.product.get_absolute_url }}">{{ vp.product }}</a></td><td>{{ vp.vendor_sku|default:"—" }}</td><td class="num">{{ vp.unit_cost|unitcost }} {{ vp.currency }}</td></tr>{% empty %}<tr><td colspan="3" class="empty">None.</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+<div class="card"><h3>Vendor portal users</h3>
+{% for c in contacts %}<div>{{ c.user.get_full_name|default:c.user.username }} ({{ c.user.username }}){% if c.title %} — {{ c.title }}{% endif %}</div>{% empty %}<p class="muted">No portal access yet. Add a portal user so this vendor can confirm POs, post shipment details, upload documents and submit invoices.</p>{% endfor %}
+</div>
+{% if object.notes or object.bank_details %}<div class="grid-2">{% if object.bank_details %}<div class="card"><h3>Bank details</h3><pre class="plain">{{ object.bank_details }}</pre></div>{% endif %}{% if object.notes %}<div class="card"><h3>Notes</h3>{{ object.notes|linebreaksbr }}</div>{% endif %}</div>{% endif %}
+{% endblock %}

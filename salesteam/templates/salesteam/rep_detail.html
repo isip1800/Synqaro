@@ -1,0 +1,44 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ object.name }}</h1><div class="sub">{{ object.code }}{% if object.territory %} · {{ object.territory }}{% endif %}{% if object.manager %} · reports to {{ object.manager }}{% endif %} · {{ object.commission_rate|pct }} of {{ object.get_commission_basis_display|slice:"5:" }}, {{ object.get_commission_trigger_display|lower }}</div></div>
+  <div class="actions"><a class="btn" href="{% url 'salesteam:salesrep_update' object.pk %}">Edit</a></div>
+</div>
+<div class="kpis">
+  <div class="kpi"><div class="label">Sales this month</div><div class="value">{{ mtd_revenue|money }}</div><div class="note">Target {{ object.monthly_target|money }}</div></div>
+  <div class="kpi"><div class="label">Target attainment</div><div class="value">{{ attainment|pct }}</div><div class="bar" style="margin-top:8px"><span style="width:{% if attainment and attainment < 100 %}{{ attainment|floatformat:0 }}{% else %}100{% endif %}%"></span></div></div>
+  <div class="kpi"><div class="label">Margin this month</div><div class="value">{{ mtd_margin|money }}</div></div>
+  <div class="kpi"><div class="label">Sales YTD</div><div class="value">{{ ytd_revenue|money }}</div><div class="note">Margin {{ ytd_margin|money }}</div></div>
+  <div class="kpi"><div class="label">Commission owed</div><div class="value">{{ object.commission_outstanding|money }}</div></div>
+</div>
+<div class="card table-wrap"><h3>Last 6 months</h3><table class="table compact"><thead><tr><th>Month</th><th class="num">Invoices</th><th class="num">Revenue</th><th class="num">Margin</th><th>Target attainment</th></tr></thead><tbody>
+{% for h in history %}<tr><td>{{ h.label }}</td><td class="num">{{ h.count }}</td><td class="num">{{ h.revenue|money }}</td><td class="num">{{ h.margin|money }}</td><td><div style="display:flex;gap:8px;align-items:center"><div class="bar" style="flex:1"><span style="width:{{ h.bar|floatformat:0 }}%"></span></div><span class="muted" style="min-width:52px;text-align:right">{{ h.pct|pct }}</span></div></td></tr>{% endfor %}
+</tbody></table></div>
+<div class="card table-wrap"><h3>Unpaid commissions</h3>
+{% if unpaid_commissions %}
+<form method="post" id="comm-form">{% csrf_token %}
+<table class="table compact"><thead><tr><th><input type="checkbox" onclick="document.querySelectorAll('.cchk').forEach(c=>c.checked=this.checked)"></th><th>Date</th><th>Invoice</th><th class="num">Basis</th><th class="num">Rate</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>
+{% for c in unpaid_commissions %}<tr><td><input type="checkbox" class="cchk" name="commission" value="{{ c.pk }}" checked></td><td>{{ c.date|date:"Y-m-d" }}</td><td><a href="{{ c.invoice.get_absolute_url }}">{{ c.invoice.number }}</a></td><td class="num">{{ c.basis_amount|money }}</td><td class="num">{{ c.rate|pct }}</td><td class="num">{{ c.amount|money }}</td><td>{% status_badge c %}</td></tr>{% endfor %}
+</tbody></table>
+<div class="inline-form" style="padding:12px 16px">
+  <button class="btn" formaction="{% url 'salesteam:approve_commissions' object.pk %}">Approve selected</button>
+  <label class="field"><span>Pay from</span><select name="paid_from">{% for a in bank_accounts %}<option value="{{ a.pk }}">{{ a }}</option>{% endfor %}</select></label>
+  <label class="field"><span>Date</span><input type="date" name="date" value="{{ today|date:'Y-m-d' }}"></label>
+  <label class="field"><span>Reference</span><input name="reference"></label>
+  <button class="btn btn-primary" formaction="{% url 'salesteam:pay_commissions' object.pk %}">Pay selected</button>
+</div></form>
+{% else %}<p class="muted" style="padding:0 16px 12px">No unpaid commissions.</p>{% endif %}
+</div>
+<div class="grid-2">
+  <div class="card table-wrap"><h3>Open quotes & orders</h3><table class="table compact"><tbody>
+  {% for o in open_orders %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a></td><td>{{ o.customer }}</td><td>{% status_badge o %}</td><td class="num">{{ o.total|money }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div>
+  <div class="card table-wrap"><h3>Customers' open invoices</h3><table class="table compact"><tbody>
+  {% for i in open_invoices %}<tr><td><a href="{{ i.get_absolute_url }}">{{ i.number }}</a></td><td>{{ i.customer }}</td><td>{{ i.due_date|date:"Y-m-d" }}{% if i.due_date < today %} <span class="badge badge-overdue">overdue</span>{% endif %}</td><td class="num">{{ i.balance_due|money }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div>
+</div>
+<div class="grid-2">
+  <div class="card table-wrap"><h3>Customers ({{ customers|length }})</h3><table class="table compact"><tbody>
+  {% for c in customers %}<tr><td><a href="{{ c.get_absolute_url }}">{{ c.name }}</a></td><td>{{ c.city }}</td></tr>{% empty %}<tr><td class="empty">No assigned customers.</td></tr>{% endfor %}</tbody></table></div>
+  <div class="card table-wrap"><h3>Payouts</h3><table class="table compact"><tbody>
+  {% for p in payouts %}<tr><td>{{ p.number }}</td><td>{{ p.date|date:"Y-m-d" }}</td><td class="num">{{ p.amount|money }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div>
+</div>
+{% endblock %}

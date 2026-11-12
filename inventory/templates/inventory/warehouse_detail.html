@@ -1,0 +1,7 @@
+{% extends "core/detail.html" %}{% load erp %}
+{% block extra %}
+<div class="card table-wrap"><h3>Stock in this warehouse · value {{ value|money }}</h3>
+<table class="table compact"><thead><tr><th>Product</th><th class="num">Qty</th><th class="num">Avg cost</th></tr></thead><tbody>
+{% for q in quants %}<tr><td><a href="{{ q.product.get_absolute_url }}">{{ q.product }}</a></td><td class="num">{{ q.quantity|qty }}</td><td class="num">{{ q.product.avg_cost|unitcost }}</td></tr>{% empty %}<tr><td colspan="3" class="empty">Empty.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

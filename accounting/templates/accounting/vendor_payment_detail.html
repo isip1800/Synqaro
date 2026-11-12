@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Vendor payment {{ object.number }} {% status_badge object %}</h1><div class="sub"><a href="{{ object.vendor.get_absolute_url }}">{{ object.vendor }}</a> · {{ object.date|date:"Y-m-d" }} · {{ object.get_method_display }} {{ object.reference }} · from {{ object.paid_from }}{% if object.journal_entry %} · <a href="{{ object.journal_entry.get_absolute_url }}">{{ object.journal_entry.number }}</a>{% endif %}</div></div>
+  <div class="actions">{% if object.status == 'draft' %}
+    <a class="btn" href="{% url 'accounting:vendorpayment_update' object.pk %}">Edit</a>
+    <form method="post" action="{% url 'accounting:vendor_payment_auto_allocate' object.pk %}">{% csrf_token %}<button class="btn">Auto-allocate to oldest</button></form>
+    <form method="post" action="{% url 'accounting:vendor_payment_post' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Post payment</button></form>{% endif %}</div>
+</div>
+<div class="kpis"><div class="kpi"><div class="label">Amount</div><div class="value">{{ object.amount|money }} {{ object.currency }}</div>{% if object.currency_id != base %}<div class="note">@ {{ object.exchange_rate }}</div>{% endif %}</div><div class="kpi"><div class="label">Allocated</div><div class="value">{{ object.allocated|money }}</div></div><div class="kpi"><div class="label">Unapplied (prepayment)</div><div class="value">{{ object.unapplied|money }}</div></div></div>
+<div class="card table-wrap"><h3>Applied to bills</h3><table class="table"><thead><tr><th>Bill</th><th>Vendor inv #</th><th class="num">Bill rate</th><th class="num">Applied</th></tr></thead><tbody>
+{% for a in object.allocations.all %}<tr><td><a href="{{ a.bill.get_absolute_url }}">{{ a.bill.number }}</a></td><td>{{ a.bill.vendor_invoice_number }}</td><td class="num">{{ a.bill.exchange_rate }}</td><td class="num">{{ a.amount|money }}</td></tr>{% empty %}<tr><td colspan="4" class="empty">Not allocated.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

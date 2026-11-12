@@ -1,0 +1,19 @@
+{% extends "portal/base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><div><h1>Welcome, {{ user.vendor_contact.vendor.name }}</h1><div class="sub">Supplier portal for {{ company.name }}</div></div>
+<div class="actions"><a class="btn btn-primary" href="{% url 'portal:shipment_create' %}">+ Advance shipping notice</a></div></div>
+<div class="kpis">
+  <div class="kpi {% if to_confirm %}bad{% endif %}"><div class="label">POs awaiting your confirmation</div><div class="value">{{ to_confirm|length }}</div></div>
+  <div class="kpi"><div class="label">Open POs</div><div class="value">{{ open_pos|length }}</div></div>
+  <div class="kpi"><div class="label">Active shipments</div><div class="value">{{ shipments|length }}</div></div>
+  <div class="kpi"><div class="label">Outstanding invoices</div><div class="value">{{ open_total|money }}</div><div class="note">{{ drafts }} awaiting approval</div></div>
+</div>
+<div class="grid-2">
+  <div class="card table-wrap"><h3>Please confirm</h3><table class="table compact"><tbody>
+  {% for po in to_confirm %}<tr><td><a href="{% url 'portal:po_detail' po.pk %}">{{ po.number }}</a></td><td>{{ po.order_date|date:"Y-m-d" }}</td><td class="num">{{ po.total|money }} {{ po.currency }}</td></tr>{% empty %}<tr><td class="empty">Nothing to confirm.</td></tr>{% endfor %}</tbody></table></div>
+  <div class="card table-wrap"><h3>Shipments in progress</h3><table class="table compact"><tbody>
+  {% for s in shipments %}<tr><td><a href="{% url 'portal:shipment_detail' s.pk %}">{{ s.number }}</a></td><td>{% status_badge s %}</td><td>ETA {{ s.eta|date:"Y-m-d"|default:"—" }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div>
+</div>
+<div class="card table-wrap"><h3>Open purchase orders</h3><table class="table compact"><thead><tr><th>PO</th><th>Date</th><th>Ready date</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
+{% for po in open_pos %}<tr><td><a href="{% url 'portal:po_detail' po.pk %}">{{ po.number }}</a></td><td>{{ po.order_date|date:"Y-m-d" }}</td><td>{{ po.vendor_confirmed_ship_date|date:"Y-m-d"|default:"—" }}</td><td class="num">{{ po.total|money }} {{ po.currency }}</td><td>{% status_badge po %}</td></tr>{% empty %}<tr><td colspan="5" class="empty">None.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

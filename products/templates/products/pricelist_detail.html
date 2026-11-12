@@ -1,0 +1,8 @@
+{% extends "core/detail.html" %}{% load erp %}
+{% block extra %}
+<div class="card table-wrap"><h3>Prices</h3>
+<table class="table"><thead><tr><th>Product</th><th class="num">Min qty</th><th class="num">Price</th><th class="num">List price</th></tr></thead><tbody>
+{% for i in object.items.all %}<tr><td><a href="{{ i.product.get_absolute_url }}">{{ i.product }}</a></td><td class="num">{{ i.min_qty|qty }}</td><td class="num">{{ i.price|money }}</td><td class="num">{{ i.product.list_price|money }}</td></tr>
+{% empty %}<tr><td colspan="4" class="empty">No prices. Click Edit to add.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><h1>Profit & Loss</h1><div class="actions"><button class="btn" onclick="window.print()">Print</button></div></div>
+<form class="toolbar" method="get"><input type="date" name="start" value="{{ start|date:'Y-m-d' }}"><input type="date" name="end" value="{{ end|date:'Y-m-d' }}"><button class="btn">Run</button></form>
+<div class="card table-wrap" style="max-width:760px"><table class="table">
+<tbody>
+<tr><td><strong>Revenue</strong></td><td></td></tr>{% include "accounting/_section.html" with rows=r.income %}
+<tr><td><strong>Total revenue</strong></td><td class="num"><strong>{{ r.total_income|money }}</strong></td></tr>
+<tr><td><strong>Cost of goods sold</strong></td><td></td></tr>{% include "accounting/_section.html" with rows=r.cogs %}
+<tr><td><strong>Total COGS</strong></td><td class="num"><strong>{{ r.total_cogs|money }}</strong></td></tr>
+<tr><td><strong>Gross profit</strong></td><td class="num"><strong>{{ r.gross_profit|money }}</strong></td></tr>
+<tr><td><strong>Operating expenses</strong></td><td></td></tr>{% include "accounting/_section.html" with rows=r.expenses %}
+<tr><td><strong>Total operating expenses</strong></td><td class="num"><strong>{{ r.total_opex|money }}</strong></td></tr>
+</tbody><tfoot><tr><td>Net income</td><td class="num">{{ r.net_income|money }}</td></tr></tfoot></table></div>
+{% endblock %}

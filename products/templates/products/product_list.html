@@ -1,0 +1,19 @@
+{% extends "core/list.html" %}{% load erp %}
+{% block list_actions %}
+<a class="btn" href="{% url 'products:unitofmeasure_list' %}">Units</a>
+<a class="btn" href="{% url 'products:vendorproduct_list' %}">Vendor prices</a>
+<a class="btn btn-primary" href="{% url 'products:product_create' %}">+ New product</a>
+{% endblock %}
+{% block list_body %}
+<div class="card table-wrap"><table class="table">
+<thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>HS code</th><th class="num">Duty %</th><th class="num">On hand</th><th class="num">Avg landed cost</th><th class="num">List price</th><th class="num">Margin</th></tr></thead>
+<tbody>
+{% for p in object_list %}<tr>
+  <td><a href="{{ p.get_absolute_url }}">{{ p.sku }}</a>{% if not p.is_active %} <span class="badge">inactive</span>{% endif %}</td>
+  <td>{{ p.name }}</td><td>{{ p.category|default:"—" }}</td><td>{{ p.hs_code|default:"—" }}</td>
+  <td class="num">{{ p.duty_rate|pct }}</td><td class="num">{{ p.on_hand|qty }}</td>
+  <td class="num">{{ p.avg_cost|unitcost }}</td><td class="num">{{ p.list_price|money }}</td>
+  <td class="num">{{ p.margin_pct|pct }}</td>
+</tr>{% empty %}<tr><td colspan="9" class="empty">No products yet.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

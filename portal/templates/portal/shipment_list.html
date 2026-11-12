@@ -1,0 +1,7 @@
+{% extends "portal/base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><h1>Shipments</h1><div class="actions"><a class="btn btn-primary" href="{% url 'portal:shipment_create' %}">+ Advance shipping notice</a></div></div>
+<div class="card table-wrap"><table class="table"><thead><tr><th>Shipment</th><th>Mode</th><th>B/L / AWB</th><th>ETD</th><th>ETA</th><th>Status</th></tr></thead><tbody>
+{% for s in shipments %}<tr><td><a href="{% url 'portal:shipment_detail' s.pk %}">{{ s.number }}</a></td><td>{{ s.get_mode_display }}</td><td>{{ s.bill_of_lading|default:"—" }}</td><td>{{ s.etd|date:"Y-m-d"|default:"—" }}</td><td>{{ s.eta|date:"Y-m-d"|default:"—" }}</td><td>{% status_badge s %}</td></tr>
+{% empty %}<tr><td colspan="6" class="empty">No shipments yet.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

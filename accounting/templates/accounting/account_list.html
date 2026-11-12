@@ -1,0 +1,8 @@
+{% extends "core/list.html" %}{% load erp %}
+{% block list_actions %}<a class="btn" href="{% url 'accounting:journalentry_create' %}">+ Journal entry</a><a class="btn btn-primary" href="{% url 'accounting:account_create' %}">+ Account</a>{% endblock %}
+{% block list_body %}
+<div class="card table-wrap"><table class="table">
+<thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Bank</th><th class="num">Balance</th></tr></thead><tbody>
+{% for a in object_list %}<tr><td><a href="{{ a.get_absolute_url }}">{{ a.code }}</a></td><td>{{ a.name }}{% if a.system_key %} <span class="badge" title="Used by automatic postings">system</span>{% endif %}{% if not a.is_active %} <span class="badge">inactive</span>{% endif %}</td><td>{{ a.get_account_type_display }}</td><td>{% if a.is_bank %}✓{% endif %}</td><td class="num">{{ a.balance|money }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

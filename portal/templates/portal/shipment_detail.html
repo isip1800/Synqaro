@@ -1,0 +1,18 @@
+{% extends "portal/base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><div><h1>Shipment {{ s.number }} {% status_badge s %}</h1><div class="sub">{{ s.get_mode_display }} · {{ s.origin_port|default:"?" }} → {{ s.destination_port|default:"?" }}</div></div>
+<div class="actions">{% if editable %}<a class="btn" href="{% url 'portal:shipment_update' s.pk %}">Update details</a>{% endif %}</div></div>
+<div class="card"><dl class="dl-grid">
+  <div><dt>Carrier</dt><dd>{{ s.carrier|default:"—" }}</dd></div><div><dt>Vessel / voyage</dt><dd>{{ s.vessel_voyage|default:"—" }}</dd></div>
+  <div><dt>B/L / AWB</dt><dd>{{ s.bill_of_lading|default:"—" }}</dd></div><div><dt>Containers</dt><dd>{{ s.container_numbers|default:"—"|linebreaksbr }}</dd></div>
+  <div><dt>ETD</dt><dd>{{ s.etd|date:"Y-m-d"|default:"—" }}</dd></div><div><dt>ETA</dt><dd>{{ s.eta|date:"Y-m-d"|default:"—" }}</dd></div>
+</dl></div>
+<div class="card table-wrap"><h3>Goods</h3><table class="table"><thead><tr><th>PO</th><th>Product</th><th class="num">Qty</th><th class="num">Cartons</th></tr></thead><tbody>
+{% for l in lines %}<tr><td>{{ l.po_line.order.number }}</td><td>{{ l.po_line.product }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.cartons|default:"—" }}</td></tr>{% endfor %}
+</tbody></table></div>
+<div class="card table-wrap"><h3>Shipping documents</h3>
+<table class="table compact"><tbody>{% for doc in s.documents.all %}<tr><td>{{ doc.get_doc_type_display }}</td><td><a href="{{ doc.file.url }}" target="_blank">{{ doc.description|default:doc.file.name }}</a></td><td class="muted">{{ doc.uploaded_at|date:"Y-m-d" }}</td></tr>{% empty %}<tr><td class="empty">Please upload commercial invoice, packing list and B/L.</td></tr>{% endfor %}</tbody></table>
+<form method="post" enctype="multipart/form-data" class="inline-form" style="padding:12px 16px">{% csrf_token %}
+  {% for field in doc_form %}<label class="field"><span>{{ field.label }}</span>{{ field }}</label>{% endfor %}<button class="btn btn-primary">Upload</button></form>
+</div>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% load erp %}
+{% block nav %}
+  <div class="nav-section">Vendor portal</div>
+  <a class="nav-link {% nav_active 'portal:dashboard' True %}" href="{% url 'portal:dashboard' %}">Overview</a>
+  <a class="nav-link {% nav_active 'portal:po_list' %}" href="{% url 'portal:po_list' %}">Purchase orders</a>
+  <a class="nav-link {% nav_active 'portal:shipment_list' %}" href="{% url 'portal:shipment_list' %}">Shipments / ASN</a>
+  <a class="nav-link {% nav_active 'portal:invoice_list' %}" href="{% url 'portal:invoice_list' %}">Invoices & payments</a>
+  <div class="nav-section">Signed in as</div>
+  <div class="nav-link">{{ user.vendor_contact.vendor.name }}</div>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Transfer {{ object.number }} {% status_badge object %}</h1><div class="sub">{{ object.from_warehouse }} → {{ object.to_warehouse }} · {{ object.date|date:"Y-m-d" }}</div></div>
+  <div class="actions">{% if object.status == 'draft' %}
+    <a class="btn" href="{% url 'inventory:stocktransfer_update' object.pk %}">Edit</a>
+    <form method="post" action="{% url 'inventory:transfer_post' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Post transfer</button></form>{% endif %}</div>
+</div>
+<div class="card table-wrap"><table class="table"><thead><tr><th>Product</th><th class="num">Qty</th></tr></thead><tbody>
+{% for l in object.lines.all %}<tr><td>{{ l.product }}</td><td class="num">{{ l.quantity|qty }}</td></tr>{% empty %}<tr><td colspan="2" class="empty">No lines.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

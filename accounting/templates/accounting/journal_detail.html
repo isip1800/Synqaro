@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><div><h1>Journal entry {{ object.number }}</h1><div class="sub">{{ object.date|date:"Y-m-d" }} · {{ object.get_source_display }}{% if object.reference %} · {{ object.reference }}{% endif %}{% if object.created_by %} · by {{ object.created_by }}{% endif %}</div></div>
+<div class="actions">{% if object.source == 'manual' %}<form method="post" action="{% url 'accounting:journal_reverse' object.pk %}" onsubmit="return confirm('Post a reversing entry?')">{% csrf_token %}<button class="btn">Reverse</button></form>{% endif %}</div></div>
+{% if object.memo %}<p>{{ object.memo }}</p>{% endif %}
+<div class="card table-wrap"><table class="table"><thead><tr><th>Account</th><th>Description</th><th>Party</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody>
+{% for l in object.lines.all %}<tr><td><a href="{{ l.account.get_absolute_url }}">{{ l.account }}</a></td><td>{{ l.description }}</td><td>{{ l.customer|default:"" }}{{ l.vendor|default:"" }}</td><td class="num">{% if l.debit %}{{ l.debit|money }}{% endif %}</td><td class="num">{% if l.credit %}{{ l.credit|money }}{% endif %}</td></tr>{% endfor %}
+</tbody><tfoot><tr><td colspan="3">Total</td><td class="num">{{ object.total_debit|money }}</td><td class="num">{{ object.total_debit|money }}</td></tr></tfoot></table></div>
+{% endblock %}

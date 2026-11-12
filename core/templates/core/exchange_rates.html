@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <h1>Currencies & Exchange Rates</h1>
+  <div class="actions">
+    <a class="btn" href="{% url 'core:currency_create' %}">+ Currency</a>
+    <a class="btn btn-primary" href="{% url 'core:exchangerate_create' %}">+ Exchange rate</a>
+  </div>
+</div>
+<p class="muted">Base currency: <strong>{{ company.base_currency }}</strong>. Rates are expressed as base-currency units per 1 unit of the foreign currency, and default onto new POs, bills and payments.</p>
+<div class="grid-2">
+  <div class="card table-wrap">
+    <h3>Currencies</h3>
+    <table class="table"><thead><tr><th>Code</th><th>Name</th><th>Symbol</th></tr></thead><tbody>
+    {% for c in currencies %}<tr><td><a href="{% url 'core:currency_update' c.pk %}">{{ c.code }}</a></td><td>{{ c.name }}</td><td>{{ c.symbol }}</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+  <div class="card table-wrap">
+    <h3>Exchange rates</h3>
+    <table class="table"><thead><tr><th>Currency</th><th>Date</th><th class="num">Rate</th></tr></thead><tbody>
+    {% for r in object_list %}<tr><td><a href="{% url 'core:exchangerate_update' r.pk %}">{{ r.currency }}</a></td><td>{{ r.date|date:"Y-m-d" }}</td><td class="num">{{ r.rate }}</td></tr>
+    {% empty %}<tr><td colspan="3" class="empty">No rates yet.</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+</div>
+{% include "core/_pagination.html" %}
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="actions">{% block detail_actions %}<a class="btn" href="{% url object|model_url:'update' object.pk %}">Edit</a>{% endblock %}</div>
+</div>
+<div class="card">
+  <dl class="dl-grid">
+    {% for label, acc in fields %}<div><dt>{{ label }}</dt><dd>{% cell object acc %}</dd></div>{% endfor %}
+  </dl>
+</div>
+{% block extra %}{% endblock %}
+{% endblock %}
