@@ -19,17 +19,53 @@ def credit_check(order):
     return None
 
 
-def confirm_order(order, override_credit=False):
+def confirm_order(order, override_credit=False, user=None):
+    """Quote -> Open. Goes to Pending approval when over the credit limit (or approval is always required)."""
+    from django.utils import timezone
+
+    from core.models import Company
+
     if order.status != SalesOrder.QUOTE:
         raise ValidationError("Only quotations can be confirmed.")
     if not order.lines.exists():
         raise ValidationError("Order has no lines.")
     problem = credit_check(order)
-    if problem and not override_credit:
-        raise ValidationError(problem + " Use 'Confirm with credit override' if approved.")
+    reasons = [r for r in (problem, "Company policy: sales orders require approval."
+                           if Company.get().require_so_approval else None) if r]
+    if reasons and not override_credit:
+        order.status = SalesOrder.PENDING
+        order.approval_reason = " ".join(reasons)[:255]
+        order.save(update_fields=["status", "approval_reason"])
+        return order
     order.status = SalesOrder.CONFIRMED
     order.credit_override = bool(problem)
-    order.save(update_fields=["status", "credit_override"])
+    if override_credit:
+        order.approved_by = user if getattr(user, "is_authenticated", False) else None
+        order.approved_at = timezone.now()
+    order.save(update_fields=["status", "credit_override", "approved_by", "approved_at"])
+    return order
+
+
+def approve_order(order, user=None):
+    """Pending approval -> Open."""
+    from django.utils import timezone
+
+    if order.status != SalesOrder.PENDING:
+        raise ValidationError("Only orders pending approval can be approved.")
+    order.status = SalesOrder.CONFIRMED
+    order.credit_override = bool(credit_check(order))
+    order.approved_by = user if getattr(user, "is_authenticated", False) else None
+    order.approved_at = timezone.now()
+    order.save(update_fields=["status", "credit_override", "approved_by", "approved_at"])
+    return order
+
+
+def reject_order(order, user=None):
+    """Pending approval -> back to Quotation for changes."""
+    if order.status != SalesOrder.PENDING:
+        raise ValidationError("Only orders pending approval can be sent back.")
+    order.status = SalesOrder.QUOTE
+    order.save(update_fields=["status"])
     return order
 
 
@@ -47,8 +83,8 @@ def create_delivery(order, quantities, date, carrier="", tracking_number="", use
     from inventory.services import issue_stock
 
     order = SalesOrder.objects.select_for_update().get(pk=order.pk)
-    if order.status not in (SalesOrder.CONFIRMED, SalesOrder.PARTIAL):
-        raise ValidationError("Order must be confirmed before shipping.")
+    if order.status not in SalesOrder.SHIPPABLE_STATUSES:
+        raise ValidationError("Order must be open (confirmed and approved) before shipping.")
     delivery = None
     total_cost = ZERO
     for line in order.lines.select_related("product"):

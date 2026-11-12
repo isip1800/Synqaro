@@ -91,6 +91,10 @@ class Company(models.Model):
     default_payment_terms_days = models.PositiveIntegerField(default=30)
     default_warehouse = models.ForeignKey("inventory.Warehouse", null=True, blank=True, on_delete=models.SET_NULL,
                                           related_name="+", help_text="Pre-selected on new orders and shipments")
+    require_so_approval = models.BooleanField(
+        "Sales orders need approval", default=False,
+        help_text="If ticked, every confirmed sales order waits for approval. Orders over the customer's credit "
+                  "limit always need approval.")
     # UPC generation
     upc_company_prefix = models.CharField("UPC company prefix", max_length=10, blank=True,
                                           help_text="Your GS1 company prefix, 6–10 digits (e.g. 676191)")

@@ -144,7 +144,7 @@ class OrderDetail(ErpDetailView):
         o = self.object
         lines = list(o.lines.select_related("product"))
         stock = {}
-        if o.status in (SalesOrder.QUOTE, SalesOrder.CONFIRMED, SalesOrder.PARTIAL):
+        if o.status in (SalesOrder.QUOTE,) + SalesOrder.RESERVING_STATUSES:
             from inventory.models import StockQuant
 
             for q in StockQuant.objects.filter(warehouse=o.warehouse, product__in=[ln.product for ln in lines]):
@@ -172,9 +172,18 @@ def _order_action(func, success):
     return view
 
 
-order_confirm = _order_action(lambda o, r: services.confirm_order(o), "Order confirmed.")
-order_confirm_override = _order_action(lambda o, r: services.confirm_order(o, override_credit=True),
-                                       "Order confirmed with credit override.")
+def _confirm(o, r):
+    services.confirm_order(o, user=r.user)
+    if o.status == SalesOrder.PENDING:
+        from django.contrib import messages as m
+
+        m.warning(r, f"Order sent for approval: {o.approval_reason}")
+    return o
+
+
+order_confirm = _order_action(_confirm, "Order submitted.")
+order_approve = _order_action(lambda o, r: services.approve_order(o, r.user), "Order approved — now open.")
+order_reject = _order_action(lambda o, r: services.reject_order(o, r.user), "Order sent back to quotation.")
 order_cancel = _order_action(lambda o, r: services.cancel_order(o), "Order cancelled.")
 order_invoice = _order_action(
     lambda o, r: services.create_invoice_from_order(o, r.POST.get("date") or datetime.date.today()),

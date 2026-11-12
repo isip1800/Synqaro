@@ -66,7 +66,7 @@ def _dashboard(request):
         "shipments": shipments,
         "low_stock": low_stock[:10],
         "low_stock_count": len(low_stock),
-        "orders_to_ship": SalesOrder.objects.filter(status__in=[SalesOrder.CONFIRMED, SalesOrder.PARTIAL])
+        "orders_to_ship": SalesOrder.objects.filter(status__in=SalesOrder.SHIPPABLE_STATUSES + (SalesOrder.PENDING,))
         .select_related("customer")[:8],
         "quotes": SalesOrder.objects.filter(status=SalesOrder.QUOTE).count(),
         "today": today,
@@ -76,7 +76,7 @@ def _dashboard(request):
 
 CompanyForm = model_form(Company, ["name", "legal_name", "tax_id", "address", "phone", "email", "base_currency",
                                    "default_sales_tax_rate", "default_payment_terms_days",
-                                   "default_warehouse", "upc_company_prefix", "upc_next_item_ref", "cbm_20", "cbm_40",
+                                   "default_warehouse", "require_so_approval", "upc_company_prefix", "upc_next_item_ref", "cbm_20", "cbm_40",
                                    "cbm_40hq", "cbm_45"])
 
 

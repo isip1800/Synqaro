@@ -271,8 +271,10 @@ class Command(BaseCommand):
         partial = order(cust[1], 4, [(P[0], 300), (P[1], 40)], po="KD-9960")
         sal.confirm_order(partial)
         sal.create_delivery(partial, {partial.lines.first().pk: D(200)}, ago(3), "FedEx Freight", "7712", admin)
+        acc.post_customer_invoice(sal.create_invoice_from_order(partial, ago(2)), admin)  # -> Backordered
         sal.confirm_order(order(cust[3], 1, [(P[2], 50), (P[0], 40)]))
-        order(cust[2], 0, [(P[0], 200), (P[1], 60)])  # quote over credit limit
+        sal.confirm_order(order(cust[2], 0, [(P[0], 200), (P[1], 60)]))  # over credit limit -> Pending approval
+        order(cust[0], 0, [(P[2], 120)])  # open quote
 
         # ---- Vendor portal login
         u = User.objects.create_user("sunrise", password="demo12345", first_name="Lily", last_name="Zhang",

@@ -60,7 +60,7 @@ def reorder(request):
     on_hand = {(q.product_id, q.warehouse_id): q.quantity for q in StockQuant.objects.all()}
     on_order = by_wh(PurchaseOrderLine.objects.filter(order__status__in=PurchaseOrder.OPEN_STATUSES + ("draft",)),
                      F("quantity") - F("qty_received"), "order__warehouse_id")
-    reserved = by_wh(SalesOrderLine.objects.filter(order__status__in=[SalesOrder.CONFIRMED, SalesOrder.PARTIAL]),
+    reserved = by_wh(SalesOrderLine.objects.filter(order__status__in=SalesOrder.RESERVING_STATUSES),
                      F("quantity") - F("qty_shipped"), "order__warehouse_id")
     wh_filter = request.GET.get("warehouse")
     rows = []

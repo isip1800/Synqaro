@@ -78,11 +78,46 @@ class SalesFlowTests(TestCase):
         self.f.customer.credit_limit = D("100")
         self.f.customer.save()
         so = self.order()
-        with self.assertRaisesMessage(ValidationError, "Credit limit"):
-            services.confirm_order(so)
-        services.confirm_order(so, override_credit=True)
+        services.confirm_order(so)
         so.refresh_from_db()
+        self.assertEqual(so.status, SalesOrder.PENDING)
+        self.assertIn("Credit limit", so.approval_reason)
+        with self.assertRaises(ValidationError):  # cannot ship until approved
+            services.create_delivery(so, {so.lines.first().pk: D(1)}, TODAY)
+        services.approve_order(so, self.f.user)
+        so.refresh_from_db()
+        self.assertEqual(so.status, SalesOrder.CONFIRMED)
         self.assertTrue(so.credit_override)
+        self.assertEqual(so.approved_by, self.f.user)
+
+    def test_company_policy_requires_approval(self):
+        from core.models import Company
+
+        c = Company.get()
+        c.require_so_approval = True
+        c.save()
+        so = self.order()
+        services.confirm_order(so)
+        so.refresh_from_db()
+        self.assertEqual(so.status, SalesOrder.PENDING)
+        services.reject_order(so)
+        so.refresh_from_db()
+        self.assertEqual(so.status, SalesOrder.QUOTE)
+
+    def test_backorder_after_ship_and_invoice(self):
+        so = self.order()
+        services.confirm_order(so)
+        a_line = so.lines.get(product=self.f.a)
+        services.create_delivery(so, {a_line.pk: D(4)}, TODAY)
+        so.refresh_from_db()
+        self.assertEqual(so.status, SalesOrder.PARTIAL)  # shipped, not yet invoiced
+        post_customer_invoice(services.create_invoice_from_order(so, TODAY))
+        so.refresh_from_db()
+        self.assertEqual(so.status, SalesOrder.BACKORDER)  # invoiced what shipped; balance open
+        self.assertEqual(so.qty_backordered, D(8))  # 6 of A + 2 of B still to ship
+        services.create_delivery(so, {ln.pk: ln.qty_to_ship for ln in so.lines.all()}, TODAY)
+        so.refresh_from_db()
+        self.assertEqual(so.status, SalesOrder.SHIPPED)
 
     def test_cannot_ship_more_than_stock_or_order(self):
         so = SalesOrder.objects.create(customer=self.f.customer, order_date=TODAY, warehouse=self.f.wh)

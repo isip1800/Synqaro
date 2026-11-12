@@ -58,10 +58,10 @@ class AvailabilityTests(TestCase):
     def test_buckets_and_formulas(self):
         b = availability.for_product(self.f.a)
         expected = {
-            "on_hand": 90, "so_quote": 5, "so_open": 30, "so_partial": 30, "so_to_invoice": 20,
-            "po_new": 40, "po_open": 130, "po_closed": 10, "booked": 100, "booked_approved": 150, "in_transit": 120,
-            "open_orders": 60, "ats": 30, "in_transit_available": 120, "ats_in_transit": 150,
-            "available_to_sell": 90 + 120 + 150 + 100 + 130 - 60,
+            "on_hand": 90, "so_quote": 5, "so_pending": 0, "so_open": 30, "so_partial": 30, "so_backorder": 0,
+            "so_to_invoice": 20, "po_new": 40, "po_open": 130, "po_closed": 10, "booked": 100,
+            "booked_approved": 150, "in_transit": 120, "open_orders": 60, "ats": 30, "in_transit_available": 120,
+            "ats_in_transit": 150, "booked_available": 250, "available_to_sell": 90 + 130 + 100 + 150 + 120 - 60,
         }
         self.assertEqual({k: b[k] for k in expected}, {k: D(v) for k, v in expected.items()})
 
@@ -71,6 +71,25 @@ class AvailabilityTests(TestCase):
         self.assertEqual(b["ats"], D(-70))
         self.assertEqual(b["in_transit_available"], D(120 - 70))
         self.assertEqual(b["ats_in_transit"], D(90 + 120 - 160))
+
+    def test_backorder_pending_and_booked_available(self):
+        from accounting.services import post_customer_invoice
+
+        partial = SalesOrder.objects.get(status=SalesOrder.PARTIAL)
+        post_customer_invoice(sal.create_invoice_from_order(partial, TODAY))
+        self.f.customer.credit_limit = D("1")  # next order goes to Pending approval
+        self.f.customer.save()
+        pending = self.order(300)
+        sal.confirm_order(pending)
+        self.assertEqual(SalesOrder.objects.get(pk=pending.pk).status, SalesOrder.PENDING)
+        b = availability.for_product(self.f.a)
+        self.assertEqual((b["so_partial"], b["so_backorder"], b["so_pending"]), (D(0), D(30), D(300)))
+        self.assertEqual(b["open_orders"], D(360))
+        # 360 ordered vs 90 stock + 120 in transit -> 150 still uncovered, taken from 250 booked
+        self.assertEqual(b["booked_available"], D(100))
+        self.assertEqual(b["in_transit_available"], D(120 - 270))
+        self.assertEqual(b["available_to_sell"], D(90 + 130 + 100 + 150 + 120 - 360))
+        self.assertEqual(sum(r["qty"] for r in availability.detail_rows(self.f.a, "so_backorder")), D(30))
 
     def test_partition_has_no_double_counting(self):
         b = availability.for_product(self.f.a)
