@@ -1,0 +1,11 @@
+{% extends "print/_base.html" %}{% load erp %}
+{% block title %}Statement {{ doc.name }}{% endblock %}
+{% block doctitle %}STATEMENT{% endblock %}
+{% block docmeta %}<table class="meta" style="width:auto;margin-left:auto"><tr><td class="muted">Customer</td><td><b>{{ doc.code }}</b></td></tr><tr><td class="muted">Date</td><td>{% now "Y-m-d" %}</td></tr></table>{% endblock %}
+{% block body %}
+<div class="box"><b>To</b><br>{{ doc.name }}<br>{{ doc.full_address }}</div><br>
+<table class="lines"><thead><tr><th>Date</th><th>Reference</th><th>Description</th><th class="num">Charges</th><th class="num">Credits</th><th class="num">Balance</th></tr></thead><tbody>
+{% for r in rows %}<tr><td>{{ r.line.entry.date|date:"Y-m-d" }}</td><td>{{ r.line.entry.reference }}</td><td>{{ r.line.entry.memo }}</td><td class="num">{% if r.line.debit %}{{ r.line.debit|money }}{% endif %}</td><td class="num">{% if r.line.credit %}{{ r.line.credit|money }}{% endif %}</td><td class="num">{{ r.balance|money }}</td></tr>{% endfor %}
+</tbody></table><br>
+<table><tr><td style="width:58%"></td><td><table class="totals"><tr class="grand"><td>Balance due</td><td class="num">{{ balance|money }}</td></tr></table></td></tr></table>
+{% endblock %}

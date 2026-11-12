@@ -58,19 +58,26 @@ document.querySelectorAll('[data-formset]').forEach(function (fs) {
     if (head && rowWh && head.value) rowWh.value = head.value;
   });
 });
-// Sales order: only offer the selected customer's buyers
+// Sales order: buyers and ship-to locations follow the selected customer
 (function () {
-  var cust = document.getElementById('id_customer'), buyer = document.getElementById('id_buyer');
-  if (!cust || !buyer) return;
-  function sync() {
-    Array.prototype.forEach.call(buyer.options, function (o) {
-      if (!o.value) return;
-      var show = o.dataset.customer === cust.value;
-      o.hidden = !show; o.disabled = !show;
-      if (!show && o.selected) buyer.value = '';
-    });
-  }
-  cust.addEventListener('change', sync); sync();
+  var cust = document.getElementById('id_customer');
+  if (!cust) return;
+  ['id_buyer', 'id_ship_to'].forEach(function (id) {
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    function sync(pickDefault) {
+      var firstDefault = null;
+      Array.prototype.forEach.call(sel.options, function (o) {
+        if (!o.value) return;
+        var show = o.dataset.customer === cust.value;
+        o.hidden = !show; o.disabled = !show;
+        if (!show && o.selected) sel.value = '';
+        if (show && o.dataset.default === '1' && !firstDefault) firstDefault = o.value;
+      });
+      if (pickDefault && !sel.value && firstDefault) sel.value = firstDefault;
+    }
+    cust.addEventListener('change', function () { sync(true); }); sync(!sel.value);
+  });
 })();
 // Order header "Default warehouse": lines still on the old default follow the new one
 (function () {

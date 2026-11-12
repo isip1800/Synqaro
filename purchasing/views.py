@@ -1,5 +1,7 @@
 import datetime
 
+from django.db.models import Prefetch
+
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -20,6 +22,8 @@ from .forms import (
     ShipmentForm,
     ShipmentLineFormSet,
 )
+from products.models import ProductImage
+
 from .models import GoodsReceipt, LandedCost, PurchaseOrder, Shipment, Vendor
 
 
@@ -124,7 +128,8 @@ class PODetail(ErpDetailView):
         ctx = super().get_context_data(**kwargs)
         po = self.object
         ctx.update(
-            lines=po.lines.select_related("product", "warehouse"),
+            lines=po.lines.select_related("product", "warehouse").prefetch_related(
+                Prefetch("product__images", queryset=ProductImage.objects.only("id", "is_primary", "product_id"))),
             receipts=po.receipts.all(),
             bills=po.bills.prefetch_related("lines"),
             shipments=Shipment.objects.filter(lines__po_line__order=po).distinct(),

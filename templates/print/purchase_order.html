@@ -1,0 +1,13 @@
+{% extends "print/_base.html" %}{% load erp %}
+{% block title %}PO {{ doc.number }}{% endblock %}
+{% block doctitle %}PURCHASE ORDER{% endblock %}
+{% block docmeta %}<table class="meta" style="width:auto;margin-left:auto"><tr><td class="muted">Number</td><td><b>{{ doc.number }}</b></td></tr><tr><td class="muted">Date</td><td>{{ doc.order_date|date:"Y-m-d" }}</td></tr>{% if doc.expected_date %}<tr><td class="muted">Required by</td><td>{{ doc.expected_date|date:"Y-m-d" }}</td></tr>{% endif %}{% if doc.incoterm %}<tr><td class="muted">Incoterm</td><td>{{ doc.get_incoterm_display }}</td></tr>{% endif %}<tr><td class="muted">Currency</td><td>{{ doc.currency }}</td></tr></table>{% endblock %}
+{% block body %}
+<table><tr><td class="box" style="width:50%"><b>Vendor</b><br>{{ doc.vendor.name }}<br>{{ doc.vendor.full_address }}{% if doc.vendor.contact_name %}<br>Attn: {{ doc.vendor.contact_name }}{% endif %}</td>
+<td class="box"><b>Deliver to</b><br>{{ doc.warehouse.name }}<br>{{ doc.warehouse.full_address }}</td></tr></table><br>
+<table class="lines"><thead><tr><th style="width:8%"></th><th style="width:16%">SKU</th><th style="width:34%">Description</th><th style="width:9%">Deliver to</th><th class="num" style="width:9%">Qty</th><th class="num" style="width:11%">Unit price</th><th class="num" style="width:13%">Amount</th></tr></thead><tbody>
+{% for l in doc.lines.all %}<tr><td style="width:44px">{% with img=l.product|thumb_data_uri %}{% if img %}<img class="thumb" src="{{ img }}">{% endif %}{% endwith %}</td><td>{{ l.product.sku }}{% if l.product.hs_code %}<br><span class="muted">HTS {{ l.product.hs_code }}</span>{% endif %}</td><td>{{ l.description|default:l.product.name }}</td><td>{{ l.warehouse.code }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|unitcost }}</td><td class="num">{{ l.amount|money }}</td></tr>{% endfor %}
+</tbody></table><br>
+<table><tr><td style="width:58%"></td><td><table class="totals"><tr class="grand"><td>Total {{ doc.currency }}</td><td class="num">{{ doc.total|money }}</td></tr></table></td></tr></table>
+{% if doc.payment_terms or doc.notes %}<br><div class="box"><b>Terms</b><br>{% if doc.payment_terms %}{{ doc.payment_terms }}<br>{% endif %}{{ doc.notes|linebreaksbr }}</div>{% endif %}
+{% endblock %}

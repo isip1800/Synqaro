@@ -233,3 +233,90 @@ class SavedFilter(models.Model):
 
     def __str__(self):
         return self.name
+
+
+# ----------------------------------------------------------------------------- files, notes, email
+
+class Attachment(models.Model):
+    """A file attached to any document (stored in the database so it survives redeploys)."""
+
+    content_type = models.ForeignKey("contenttypes.ContentType", on_delete=models.CASCADE)
+    object_id = models.PositiveBigIntegerField()
+    filename = models.CharField(max_length=255)
+    mime_type = models.CharField(max_length=100, default="application/octet-stream")
+    size = models.PositiveIntegerField(default=0)
+    data = models.BinaryField()
+    description = models.CharField(max_length=255, blank=True)
+    uploaded_by = models.ForeignKey("auth.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-uploaded_at"]
+        indexes = [models.Index(fields=["content_type", "object_id"])]
+
+    def __str__(self):
+        return self.filename
+
+
+class Note(models.Model):
+    """Time-stamped internal note on any document."""
+
+    content_type = models.ForeignKey("contenttypes.ContentType", on_delete=models.CASCADE)
+    object_id = models.PositiveBigIntegerField()
+    text = models.TextField()
+    author = models.ForeignKey("auth.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["content_type", "object_id"])]
+
+
+class EmailTemplate(models.Model):
+    KINDS = [
+        ("sales_order", "Sales order confirmation"),
+        ("purchase_order", "Purchase order to vendor"),
+        ("invoice", "Customer invoice"),
+        ("statement", "Customer statement"),
+    ]
+    kind = models.CharField(max_length=20, choices=KINDS, unique=True)
+    subject = models.CharField(max_length=255)
+    body = models.TextField(help_text="Placeholders: {number} {company} {customer} {vendor} {buyer} {total} "
+                                      "{currency} {customer_po} {date} {due_date} {ship_start} {cancel_date} {user}")
+    attach_pdf = models.BooleanField("Attach PDF of the document", default=True)
+    cc = models.CharField("Always CC", max_length=255, blank=True, help_text="Comma-separated addresses")
+
+    class Meta:
+        ordering = ["kind"]
+
+    def __str__(self):
+        return self.get_kind_display()
+
+    def get_absolute_url(self):
+        from django.urls import reverse
+
+        return reverse("core:emailtemplate_update", args=[self.pk])
+
+
+class EmailLog(models.Model):
+    SENT, FAILED, NOT_CONFIGURED = "sent", "failed", "not_configured"
+    STATUSES = [(SENT, "Sent"), (FAILED, "Failed"), (NOT_CONFIGURED, "Not sent — email not configured")]
+    content_type = models.ForeignKey("contenttypes.ContentType", null=True, blank=True, on_delete=models.SET_NULL)
+    object_id = models.PositiveBigIntegerField(null=True, blank=True)
+    document = models.CharField(max_length=60, blank=True)
+    to = models.TextField()
+    cc = models.TextField(blank=True)
+    subject = models.CharField(max_length=255)
+    body = models.TextField()
+    attachments = models.TextField(blank=True, help_text="File names, one per line")
+    status = models.CharField(max_length=20, choices=STATUSES)
+    error = models.TextField(blank=True)
+    sent_by = models.ForeignKey("auth.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["content_type", "object_id"])]
+
+    def __str__(self):
+        return f"{self.subject} -> {self.to}"

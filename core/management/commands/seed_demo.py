@@ -150,6 +150,15 @@ class Command(BaseCommand):
             for name, title in buyers:
                 CustomerBuyer.objects.create(customer=c, name=name, title=title,
                                              email=name.split()[0].lower() + "@" + c.code[2:].lower() + ".example")
+        from sales.models import CustomerLocation
+
+        for c, stores in ((cust[0], [("893", "HomeStyle #893", "Dallas", "TX"), ("1204", "HomeStyle #1204", "Austin",
+                                                                                    "TX")]),
+                          (cust[1], [("DC1", "Kitchen Depot DC", "Phoenix", "AZ"), ("0451", "Kitchen Depot #451",
+                                                                                     "Tucson", "AZ")])):
+            for i, (lid, name, city, state) in enumerate(stores):
+                CustomerLocation.objects.create(customer=c, location_id=lid, name=name, city=city, state=state,
+                                                country="US", address=f"{100 + i * 25} Commerce Dr", is_default=i == 0)
         for p, style in zip(P, ["CK-STYLE-PAN", "CK-STYLE-PAN", "CK-STYLE-UTN", "LT-STYLE-LMP", "LT-STYLE-BLB",
                                 "TL-STYLE-SCR"]):
             p.style_number = style
@@ -259,7 +268,9 @@ class Command(BaseCommand):
         def order(customer, days, lines, rep=None, po=""):
             so = SalesOrder.objects.create(customer=customer, order_date=ago(days), warehouse=main,
                                            sales_rep=rep or customer.sales_rep, customer_po=po, created_by=admin,
-                                           buyer=customer.buyers.first())
+                                           buyer=customer.buyers.first(),
+                                           master_customer_po=f"M{po}" if po else "",
+                                           ship_start_date=ago(days - 3), cancel_date=ago(days - 20))
             sal.copy_order_defaults(so)
             so.save()
             for p, q in lines:

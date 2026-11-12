@@ -1,0 +1,13 @@
+{% extends "print/_base.html" %}{% load erp %}
+{% block title %}Invoice {{ doc.number }}{% endblock %}
+{% block doctitle %}INVOICE{% endblock %}
+{% block docmeta %}<table class="meta" style="width:auto;margin-left:auto"><tr><td class="muted">Number</td><td><b>{{ doc.number }}</b></td></tr><tr><td class="muted">Date</td><td>{{ doc.invoice_date|date:"Y-m-d" }}</td></tr><tr><td class="muted">Due</td><td>{{ doc.due_date|date:"Y-m-d"|default:"—" }}</td></tr>{% if doc.sales_order.customer_po %}<tr><td class="muted">Customer PO</td><td>{{ doc.sales_order.customer_po }}</td></tr>{% endif %}{% if company.tax_id %}<tr><td class="muted">Tax ID</td><td>{{ company.tax_id }}</td></tr>{% endif %}</table>{% endblock %}
+{% block body %}
+<table><tr><td class="box" style="width:50%"><b>Bill to</b><br>{{ doc.customer.name }}<br>{{ doc.customer.full_address }}</td>
+<td class="box"><b>Ship to</b><br>{% if doc.sales_order.ship_to %}{{ doc.sales_order.ship_to.location_id }} — {{ doc.sales_order.ship_to.name }}<br>{% endif %}{{ doc.sales_order.shipping_address|default:""|linebreaksbr }}</td></tr></table><br>
+<table class="lines"><thead><tr><th style="width:50%">Description</th><th class="num" style="width:12%">Qty</th><th class="num" style="width:13%">Unit price</th><th class="num" style="width:10%">Disc</th><th class="num" style="width:15%">Amount</th></tr></thead><tbody>
+{% for l in doc.lines.all %}<tr><td>{{ l.description }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|money }}</td><td class="num">{% if l.discount_pct %}{{ l.discount_pct|pct }}{% endif %}</td><td class="num">{{ l.amount|money }}</td></tr>{% endfor %}
+</tbody></table><br>
+<table><tr><td style="width:58%"></td><td><table class="totals"><tr><td>Subtotal</td><td class="num">{{ doc.subtotal|money }}</td></tr><tr><td>Tax</td><td class="num">{{ doc.tax|money }}</td></tr><tr class="grand"><td>Total {{ company.base_currency_id }}</td><td class="num">{{ doc.total|money }}</td></tr><tr><td>Paid</td><td class="num">{{ doc.amount_paid|money }}</td></tr><tr class="grand"><td>Balance due</td><td class="num">{{ doc.balance_due|money }}</td></tr></table></td></tr></table>
+{% if doc.notes %}<br><div class="box"><b>Notes</b><br>{{ doc.notes|linebreaksbr }}</div>{% endif %}
+{% endblock %}

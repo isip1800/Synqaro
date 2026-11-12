@@ -10,16 +10,17 @@
       <form method="post" action="{% url 'purchasing:po_create_shipment' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Book import shipment</button></form>
       <a class="btn" href="{% url 'purchasing:po_receive' object.pk %}">Receive directly</a>
     {% endif %}
-    <button class="btn" onclick="window.print()">Print</button>
+    <a class="btn" href="{% url 'core:email_compose' 'purchase_order' object.pk %}">✉ Email</a>
+    <a class="btn" href="{% url 'core:print_document' 'purchase_order' object.pk %}" target="_blank">Print / PDF</a>
     {% if object.status in 'draft,sent,confirmed' %}<form method="post" action="{% url 'purchasing:po_cancel' object.pk %}" onsubmit="return confirm('Cancel this PO?')">{% csrf_token %}<button class="btn btn-danger">Cancel</button></form>{% endif %}
     {% if object.status in 'partial,received' %}<form method="post" action="{% url 'purchasing:po_close' object.pk %}">{% csrf_token %}<button class="btn">Close PO</button></form>{% endif %}
   </div>
 </div>
 <div class="card table-wrap"><table class="table">
-<thead><tr><th>Product</th><th>Warehouse</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th>{% if fs.any %}<th class="num">FS Cost USD</th><th class="num">FS Cost RMB</th><th class="num">Ext FS Cost USD</th><th class="num">Ext FS Cost RMB</th>{% endif %}<th class="num">On shipments</th><th class="num">Received</th><th class="num">Billed</th></tr></thead><tbody>
-{% for l in lines %}<tr><td><a href="{{ l.product.get_absolute_url }}">{{ l.product.sku }}</a></td><td>{{ l.warehouse.code }}</td><td>{{ l.description|default:l.product.name }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|unitcost }}</td><td class="num">{{ l.amount|money }}</td>{% if fs.any %}<td class="num">{{ l.fs_cost_usd|unitcost }}</td><td class="num">{{ l.fs_cost_rmb|unitcost }}</td><td class="num">{{ l.ext_fs_cost_usd|unitcost }}</td><td class="num">{{ l.ext_fs_cost_rmb|unitcost }}</td>{% endif %}<td class="num">{{ l.qty_on_shipments|qty }}</td><td class="num">{{ l.qty_received|qty }}</td><td class="num">{{ l.qty_billed|qty }}</td></tr>{% endfor %}
+<thead><tr><th></th><th>Product</th><th>Warehouse</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th>{% if fs.any %}<th class="num">FS Cost USD</th><th class="num">FS Cost RMB</th><th class="num">Ext FS Cost USD</th><th class="num">Ext FS Cost RMB</th>{% endif %}<th class="num">On shipments</th><th class="num">Received</th><th class="num">Billed</th></tr></thead><tbody>
+{% for l in lines %}<tr><td>{% with img=l.product.primary_image %}{% if img %}<a href="{% url 'products:image' img.pk %}" target="_blank"><img class="line-thumb" src="{{ img.thumb_url }}" alt="" loading="lazy"></a>{% endif %}{% endwith %}</td><td><a href="{{ l.product.get_absolute_url }}">{{ l.product.sku }}</a></td><td>{{ l.warehouse.code }}</td><td>{{ l.description|default:l.product.name }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|unitcost }}</td><td class="num">{{ l.amount|money }}</td>{% if fs.any %}<td class="num">{{ l.fs_cost_usd|unitcost }}</td><td class="num">{{ l.fs_cost_rmb|unitcost }}</td><td class="num">{{ l.ext_fs_cost_usd|unitcost }}</td><td class="num">{{ l.ext_fs_cost_rmb|unitcost }}</td>{% endif %}<td class="num">{{ l.qty_on_shipments|qty }}</td><td class="num">{{ l.qty_received|qty }}</td><td class="num">{{ l.qty_billed|qty }}</td></tr>{% endfor %}
 </tbody>
-<tfoot><tr><td colspan="5">Total {{ object.currency }}</td><td class="num">{{ object.total|money }}</td>{% if fs.any %}<td></td><td></td><td class="num">{{ fs.usd|money }}</td><td class="num">{{ fs.rmb|money }}</td>{% endif %}<td colspan="3">{% if object.currency_id != base %}≈ {{ object.total_base|money }} {{ base }}{% endif %}</td></tr></tfoot>
+<tfoot><tr><td colspan="6">Total {{ object.currency }}</td><td class="num">{{ object.total|money }}</td>{% if fs.any %}<td></td><td></td><td class="num">{{ fs.usd|money }}</td><td class="num">{{ fs.rmb|money }}</td>{% endif %}<td colspan="3">{% if object.currency_id != base %}≈ {{ object.total_base|money }} {{ base }}{% endif %}</td></tr></tfoot>
 </table></div>
 <div class="grid-2">
   <div class="card">
@@ -56,4 +57,5 @@
   {% for b in bills %}<tr><td><a href="{{ b.get_absolute_url }}">{{ b.number }}</a></td><td>{% status_badge b %}</td><td class="num">{{ b.total|money }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div>
 </div>
 {% if object.payment_terms or object.notes %}<div class="card"><h3>Terms & notes</h3>{% if object.payment_terms %}<p><strong>Payment terms:</strong> {{ object.payment_terms }}</p>{% endif %}{{ object.notes|linebreaksbr }}</div>{% endif %}
+{% notes_and_files object %}
 {% endblock %}

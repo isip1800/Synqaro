@@ -255,6 +255,7 @@ class MultiWarehouseTests(TestCase):
 
         self.client.login(username="admin", password="pw-admin-123")
         base = {"customer": self.f.customer.pk, "order_date": "2026-06-15", "warehouse": self.f.wh.pk,
+                "ship_to": self.f.customer.default_location.pk,
                 "tax_rate": "0", "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0", "lines-MIN_NUM_FORMS": "0",
                 "lines-MAX_NUM_FORMS": "1000", "lines-0-product": self.f.a.pk, "lines-0-quantity": "5",
                 "lines-0-discount_pct": "0"}

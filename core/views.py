@@ -188,3 +188,30 @@ def filter_delete(request, pk):
             f.delete()
             messages.success(request, f"Filter “{f.name}” deleted.")
     return redirect(_safe_next(request))
+
+
+# ----------------------------------------------------------------------------- email settings / log
+
+@internal_required
+def email_settings(request):
+    from django.conf import settings as dj
+
+    from . import documents
+    from .models import EmailLog
+
+    templates = [documents.get_template(k) for k, _ in documents.DEFAULT_TEMPLATES.items()]
+    return render(request, "core/email_settings.html", {
+        "title": "Email", "configured": dj.EMAIL_CONFIGURED, "host": dj.EMAIL_HOST, "port": dj.EMAIL_PORT,
+        "from_email": dj.DEFAULT_FROM_EMAIL, "user_name": dj.EMAIL_HOST_USER, "templates": templates,
+        "recent": EmailLog.objects.all()[:10],
+    })
+
+
+class EmailLogList(ErpListView):
+    from .models import EmailLog as model  # noqa: N813
+
+    title = "Email Log"
+    columns = (("Sent", "created_at"), ("Document", "document"), ("To", "to"), ("Subject", "subject"),
+               ("Status", "status"), ("By", "sent_by"), ("Error", "error"))
+    search_fields = ("document", "to", "subject")
+    create_url = None
