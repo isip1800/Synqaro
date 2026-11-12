@@ -121,6 +121,7 @@ class BuyerTests(TestCase):
     def order_post(self, buyer):
         return self.client.post("/sales/orders/new/", {
             "customer": self.f.customer.pk, "buyer": buyer.pk, "order_date": "2026-06-15",
+            "ship_to": self.f.customer.default_location.pk,
             "warehouse": self.f.wh.pk, "tax_rate": "0", "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0",
             "lines-MIN_NUM_FORMS": "0", "lines-MAX_NUM_FORMS": "1000", "lines-0-product": self.f.a.pk,
             "lines-0-warehouse": self.f.wh.pk, "lines-0-quantity": "2", "lines-0-discount_pct": "0"})
@@ -141,7 +142,7 @@ class BuyerTests(TestCase):
         self.order_post(rachel)
         so = SalesOrder.objects.get()
         self.assertEqual(so.buyer, rachel)
-        self.assertContains(self.client.get(so.get_absolute_url()), "Buyer: Rachel Kim")
+        self.assertContains(self.client.get(so.get_absolute_url()), "<dt>Buyer</dt><dd>Rachel Kim")
         # a buyer from another customer is rejected
         other = Customer.objects.create(code="C2", name="Other Store")
         stranger = CustomerBuyer.objects.create(customer=other, name="Someone Else")

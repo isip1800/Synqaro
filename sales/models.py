@@ -36,6 +36,19 @@ class Customer(AddressMixin, TimeStamped):
     def get_absolute_url(self):
         return reverse("sales:customer_detail", args=[self.pk])
 
+    def save(self, *args, **kwargs):
+        new = self.pk is None
+        super().save(*args, **kwargs)
+        if new and not self.locations.exists():
+            CustomerLocation.objects.create(customer=self, location_id="MAIN", name="Primary Location",
+                                            address=self.address, city=self.city, state=self.state,
+                                            postal_code=self.postal_code, country=self.country or "US",
+                                            phone=self.phone, is_default=True)
+
+    @property
+    def default_location(self):
+        return self.locations.filter(is_active=True).order_by("-is_default", "location_id").first()
+
     @property
     def balance(self):
         """Open receivable balance (debit balance on AR)."""
@@ -60,6 +73,46 @@ class Customer(AddressMixin, TimeStamped):
         if not self.credit_limit:
             return None
         return self.credit_limit - self.balance - self.open_orders_value
+
+
+class CustomerLocation(models.Model):
+    """Ship-to location (store / DC) of a customer, e.g. 893 - TJ MAXX #893."""
+
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="locations")
+    location_id = models.CharField("Location ID", max_length=30)
+    name = models.CharField("Location name", max_length=150)
+    address = models.CharField(max_length=255, blank=True)
+    address2 = models.CharField("Address line 2", max_length=255, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    state = models.CharField(max_length=50, blank=True)
+    postal_code = models.CharField(max_length=20, blank=True)
+    country = models.CharField(max_length=50, blank=True, default="US")
+    phone = models.CharField(max_length=50, blank=True)
+    is_default = models.BooleanField("Default", default=False)
+    is_active = models.BooleanField("Active", default=True)
+
+    class Meta:
+        unique_together = ("customer", "location_id")
+        ordering = ["customer__name", "-is_default", "location_id"]
+        verbose_name = "customer location"
+
+    def __str__(self):
+        return f"{self.location_id} - {self.name}"
+
+    def get_absolute_url(self):
+        return self.customer.get_absolute_url() + "#locations"
+
+    @property
+    def full_address(self):
+        city_line = " ".join(p for p in [f"{self.city}," if self.city else "", self.state, self.postal_code] if p)
+        return "\n".join(p for p in [self.name, self.address, self.address2, city_line.strip(" ,"), self.country]
+                         if p)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.is_default:
+            CustomerLocation.objects.filter(customer=self.customer, is_default=True).exclude(pk=self.pk) \
+                .update(is_default=False)
 
 
 class CustomerBuyer(models.Model):
@@ -108,20 +161,34 @@ class SalesOrder(NumberedMixin, TimeStamped):
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name="sales_orders")
     buyer = models.ForeignKey(CustomerBuyer, null=True, blank=True, on_delete=models.SET_NULL,
                               related_name="sales_orders", help_text="The customer's buyer who placed the order")
+    ship_to = models.ForeignKey(CustomerLocation, null=True, blank=True, on_delete=models.PROTECT,
+                                related_name="sales_orders", verbose_name="Ship-to location")
     order_date = models.DateField()
+    ship_start_date = models.DateField("Start ship date", null=True, blank=True, db_index=True)
+    cancel_date = models.DateField("Cancel date", null=True, blank=True, db_index=True,
+                                   help_text="Customer cancels anything not shipped by this date")
     requested_date = models.DateField(null=True, blank=True)
     valid_until = models.DateField(null=True, blank=True, help_text="Quote expiry")
     sales_rep = models.ForeignKey("salesteam.SalesRep", null=True, blank=True, on_delete=models.SET_NULL,
                                   related_name="sales_orders")
     warehouse = models.ForeignKey("inventory.Warehouse", on_delete=models.PROTECT, verbose_name="Default warehouse",
                                   help_text="Pre-fills the warehouse on new lines; each line can ship from its own warehouse")
-    customer_po = models.CharField("Customer PO #", max_length=60, blank=True)
+    customer_po = models.CharField("Customer PO #", max_length=60, blank=True, db_index=True)
+    master_customer_po = models.CharField("Master customer PO #", max_length=60, blank=True, db_index=True,
+                                          help_text="The customer's master / blanket PO this order belongs to")
     tax_rate = models.DecimalField("Tax %", max_digits=6, decimal_places=3, default=ZERO)
     shipping_address = models.TextField(blank=True)
     notes = models.TextField(blank=True)
     status = models.CharField(max_length=12, choices=STATUSES, default=QUOTE, editable=False, db_index=True)
     credit_override = models.BooleanField(default=False, editable=False)
     approval_reason = models.CharField(max_length=255, blank=True, editable=False)
+    on_hold = models.BooleanField(default=False, editable=False)
+    hold_reason = models.CharField(max_length=255, blank=True, editable=False)
+    released_at = models.DateTimeField("Released to warehouse", null=True, blank=True, editable=False)
+    released_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="+", editable=False)
+    reopened = models.BooleanField(default=False, editable=False,
+                                   help_text="Shipped / closed order reopened for changes")
     approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                     related_name="+", editable=False)
     approved_at = models.DateTimeField(null=True, blank=True, editable=False)
@@ -133,6 +200,22 @@ class SalesOrder(NumberedMixin, TimeStamped):
 
     def get_absolute_url(self):
         return reverse("sales:salesorder_detail", args=[self.pk])
+
+    EDIT_STATUSES = (QUOTE, PENDING, CONFIRMED, PARTIAL, BACKORDER)
+
+    @property
+    def is_editable(self):
+        """Editable until released to the warehouse; shipped / closed orders only after Reopen."""
+        if self.released_at or self.status == self.CANCELLED:
+            return False
+        return self.status in self.EDIT_STATUSES or self.reopened
+
+    @property
+    def past_cancel(self):
+        import datetime
+
+        return bool(self.cancel_date and self.cancel_date < datetime.date.today()
+                    and self.status in (self.PENDING, self.CONFIRMED, self.PARTIAL, self.BACKORDER))
 
     @property
     def subtotal(self):

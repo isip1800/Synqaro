@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h1>{{ title }}</h1><div class="sub"><a href="{{ obj.get_absolute_url }}">← back</a> · <a href="{% url 'core:print_document' key obj.pk %}?format=pdf" target="_blank">Preview PDF</a></div></div></div>
+{% if not configured %}<div class="msg msg-warning">Outgoing email isn't connected yet — you can try the screen, but messages will only be saved to the email log. <a href="{% url 'core:email_settings' %}">How to connect email</a>.</div>{% endif %}
+<form method="post" class="card form-card">{% csrf_token %}
+  <div class="form-grid" style="grid-template-columns:1fr">
+    <label class="field"><span>To *</span><input name="to" value="{{ to }}" required placeholder="name@customer.com, other@customer.com"></label>
+    <label class="field"><span>CC</span><input name="cc" value="{{ cc }}"></label>
+    <label class="field"><span>Subject *</span><input name="subject" value="{{ subject }}" required></label>
+    <label class="field"><span>Message</span><textarea name="body" rows="12">{{ body }}</textarea></label>
+  </div>
+  <h3>Attachments</h3>
+  <label class="inline-check"><input type="checkbox" name="attach_pdf" value="1" {% if attach_pdf %}checked{% endif %}> {{ pdf_name }} (PDF of this document)</label>
+  {% for f in files %}<label class="inline-check"><input type="checkbox" name="files" value="{{ f.pk }}"> {{ f.filename }}</label>{% endfor %}
+  <div class="form-actions"><button class="btn btn-primary">Send email</button><a class="btn" href="{{ obj.get_absolute_url }}">Cancel</a></div>
+</form>
+{% if history %}<div class="card table-wrap"><h3>Previously sent</h3><table class="table compact"><tbody>{% for e in history %}<tr><td>{{ e.created_at|date:"Y-m-d H:i" }}</td><td>{{ e.to }}</td><td>{{ e.subject }}</td><td>{{ e.get_status_display }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% endblock %}

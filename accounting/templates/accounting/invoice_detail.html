@@ -10,7 +10,8 @@
     {% elif object.status in 'posted,partial' %}
       <a class="btn btn-primary" href="{% url 'accounting:customerpayment_create' %}?customer={{ object.customer.pk }}&amount={{ object.balance_due }}">Record payment</a>
     {% endif %}
-    <button class="btn" onclick="window.print()">Print</button>
+    {% if object.status != 'draft' %}<a class="btn" href="{% url 'core:email_compose' 'invoice' object.pk %}">✉ Email</a>{% endif %}
+    <a class="btn" href="{% url 'core:print_document' 'invoice' object.pk %}" target="_blank">Print / PDF</a>
   </div>
 </div>
 <div class="card">
@@ -32,4 +33,5 @@
 </div></div>
 {% if object.allocations.exists %}<div class="card table-wrap no-print"><h3>Payments applied</h3><table class="table compact"><tbody>{% for a in object.allocations.all %}<tr><td><a href="{{ a.payment.get_absolute_url }}">{{ a.payment.number }}</a></td><td>{{ a.payment.date|date:"Y-m-d" }}</td><td class="num">{{ a.amount|money }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
 {% if object.notes %}<div class="card"><h3>Notes</h3>{{ object.notes|linebreaksbr }}</div>{% endif %}
+{% notes_and_files object %}
 {% endblock %}

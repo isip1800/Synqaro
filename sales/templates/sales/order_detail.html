@@ -1,28 +1,50 @@
 {% extends "base.html" %}{% load erp %}
 {% block content %}
 <div class="page-head">
-  <div><h1>{% if object.status == 'quote' %}Quotation{% else %}Sales order{% endif %} {{ object.number }} {% status_badge object %}</h1>
-  <div class="sub"><a href="{{ object.customer.get_absolute_url }}">{{ object.customer }}</a> · {{ object.order_date|date:"Y-m-d" }}{% if object.buyer %} · Buyer: {{ object.buyer }}{% if object.buyer.email %} (<a href="mailto:{{ object.buyer.email }}">{{ object.buyer.email }}</a>){% endif %}{% endif %}{% if object.customer_po %} · Cust. PO {{ object.customer_po }}{% endif %} · default WH {{ object.warehouse.code }}{% if multi_wh %} (multiple warehouses){% endif %}{% if object.sales_rep %} · {{ object.sales_rep }}{% endif %}{% if object.credit_override %} · <span class="badge badge-partial">credit override</span>{% endif %}{% if object.approved_at %} · approved {{ object.approved_at|date:"Y-m-d" }}{% if object.approved_by %} by {{ object.approved_by }}{% endif %}{% endif %}</div></div>
+  <div><h1>{% if object.status == 'quote' %}Quotation{% else %}Sales order{% endif %} {{ object.number }} {% status_badge object %}{% if object.on_hold %} <span class="badge badge-void">On hold</span>{% endif %}{% if object.released_at %} <span class="badge badge-posted">Released to warehouse</span>{% endif %}{% if object.past_cancel %} <span class="badge badge-overdue">Past cancel date</span>{% endif %}</h1>
+  <div class="sub"><a href="{{ object.customer.get_absolute_url }}">{{ object.customer }}</a> · {{ object.order_date|date:"Y-m-d" }}{% if object.sales_rep %} · {{ object.sales_rep }}{% endif %}{% if object.credit_override %} · <span class="badge badge-partial">credit override</span>{% endif %}{% if object.approved_at %} · approved {{ object.approved_at|date:"Y-m-d" }}{% if object.approved_by %} by {{ object.approved_by }}{% endif %}{% endif %}</div></div>
   <div class="actions">
+    {% if object.is_editable %}<a class="btn" href="{% url 'sales:salesorder_update' object.pk %}">Edit</a>{% endif %}
     {% if object.status == 'quote' %}
-      <a class="btn" href="{% url 'sales:salesorder_update' object.pk %}">Edit</a>
       <form method="post" action="{% url 'sales:order_confirm' object.pk %}">{% csrf_token %}<button class="btn btn-primary">{% if credit_warning %}Submit for approval{% else %}Confirm order{% endif %}</button></form>
     {% endif %}
     {% if object.status == 'pending' %}
       <form method="post" action="{% url 'sales:order_approve' object.pk %}" onsubmit="return confirm('Approve this order?')">{% csrf_token %}<button class="btn btn-primary">Approve order</button></form>
       <form method="post" action="{% url 'sales:order_reject' object.pk %}">{% csrf_token %}<button class="btn">Send back to quote</button></form>
     {% endif %}
-    {% if object.status == 'confirmed' or object.status == 'partial' or object.status == 'backorder' %}<a class="btn btn-primary" href="{% url 'sales:order_ship' object.pk %}">Ship / deliver</a>{% endif %}
-    {% if object.status in 'partial,shipped' %}<form method="post" action="{% url 'sales:order_invoice' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Create invoice</button></form>{% endif %}
-    <button class="btn" onclick="window.print()">Print</button>
+    {% if object.status == 'confirmed' or object.status == 'partial' or object.status == 'backorder' %}
+      {% if not object.on_hold %}<a class="btn btn-primary" href="{% url 'sales:order_ship' object.pk %}">Ship / deliver</a>{% endif %}
+      {% if object.released_at %}<form method="post" action="{% url 'sales:order_recall' object.pk %}">{% csrf_token %}<button class="btn">Recall from warehouse</button></form>
+      {% elif not object.on_hold %}<form method="post" action="{% url 'sales:order_release' object.pk %}" onsubmit="return confirm('Release to the warehouse? The order will be locked for editing.')">{% csrf_token %}<button class="btn">Release to warehouse</button></form>{% endif %}
+    {% endif %}
+    {% if object.status == 'partial' or object.status == 'shipped' or object.status == 'backorder' %}<form method="post" action="{% url 'sales:order_invoice' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Create invoice</button></form>{% endif %}
+    {% if object.status == 'pending' or object.status == 'confirmed' or object.status == 'partial' or object.status == 'backorder' or object.status == 'quote' %}
+      {% if object.on_hold %}<form method="post" action="{% url 'sales:order_unhold' object.pk %}">{% csrf_token %}<button class="btn">Remove hold</button></form>
+      {% else %}<form method="post" action="{% url 'sales:order_hold' object.pk %}" onsubmit="var r=prompt('Reason for hold?','');if(r===null)return false;this.reason.value=r;">{% csrf_token %}<input type="hidden" name="reason"><button class="btn">Hold</button></form>{% endif %}
+    {% endif %}
+    {% if object.status == 'cancelled' or object.status == 'shipped' or object.status == 'closed' %}{% if not object.reopened %}<form method="post" action="{% url 'sales:order_reopen' object.pk %}" onsubmit="return confirm('Reopen this order?')">{% csrf_token %}<button class="btn">Reopen</button></form>{% endif %}{% endif %}
+    <a class="btn" href="{% url 'core:email_compose' 'sales_order' object.pk %}">✉ Email</a>
+    <a class="btn" href="{% url 'core:print_document' 'sales_order' object.pk %}" target="_blank">Print / PDF</a>
     {% if object.status == 'quote' or object.status == 'pending' or object.status == 'confirmed' %}<form method="post" action="{% url 'sales:order_cancel' object.pk %}" onsubmit="return confirm('Cancel this order?')">{% csrf_token %}<button class="btn btn-danger">Cancel</button></form>{% endif %}
   </div>
 </div>
+{% if object.on_hold %}<div class="msg msg-error"><strong>On hold:</strong> {{ object.hold_reason }}</div>{% endif %}
+{% if object.reopened %}<div class="msg">Reopened — click Edit to add lines or quantity.</div>{% endif %}
+<div class="card"><dl class="dl-grid">
+  <div><dt>Ship to</dt><dd>{% if object.ship_to %}<strong>{{ object.ship_to.location_id }} - {{ object.ship_to.name }}</strong><br>{% endif %}<span class="muted">{{ object.shipping_address|linebreaksbr }}</span></dd></div>
+  <div><dt>Buyer</dt><dd>{% if object.buyer %}{{ object.buyer }}{% if object.buyer.email %}<br><a href="mailto:{{ object.buyer.email }}">{{ object.buyer.email }}</a>{% endif %}{% else %}—{% endif %}</dd></div>
+  <div><dt>Customer PO #</dt><dd>{{ object.customer_po|default:"—" }}</dd></div>
+  <div><dt>Master customer PO #</dt><dd>{{ object.master_customer_po|default:"—" }}</dd></div>
+  <div><dt>Start ship</dt><dd>{{ object.ship_start_date|date:"Y-m-d"|default:"—" }}</dd></div>
+  <div><dt>Cancel date</dt><dd>{% if object.past_cancel %}<span class="badge badge-overdue">{{ object.cancel_date|date:"Y-m-d" }}</span>{% else %}{{ object.cancel_date|date:"Y-m-d"|default:"—" }}{% endif %}</dd></div>
+  <div><dt>Default warehouse</dt><dd>{{ object.warehouse.code }}{% if multi_wh %} (lines in several){% endif %}</dd></div>
+  <div><dt>Released to warehouse</dt><dd>{% if object.released_at %}{{ object.released_at|date:"Y-m-d H:i" }}{% if object.released_by %} by {{ object.released_by }}{% endif %}{% else %}No{% endif %}</dd></div>
+</dl></div>
 {% if object.status == 'pending' %}<div class="msg msg-warning"><strong>Pending approval:</strong> {{ object.approval_reason|default:"awaiting approval" }}</div>{% elif credit_warning %}<div class="msg msg-warning">{{ credit_warning }} Confirming will send it for approval.</div>{% endif %}
 {% if object.status == 'backorder' %}<div class="msg msg-info">Backordered: everything shipped so far is invoiced; the open balance below is still to ship.</div>{% endif %}
 <div class="card table-wrap"><table class="table">
-<thead><tr><th>Product</th><th>Warehouse</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Disc</th><th class="num">Amount</th>{% if object.status in 'quote,pending,confirmed,partial,backorder' %}<th class="num">In stock</th>{% endif %}<th class="num">Shipped</th><th class="num">Invoiced</th></tr></thead><tbody>
-{% for r in lines %}{% with l=r.line %}<tr><td><a href="{{ l.product.get_absolute_url }}">{{ l.product.sku }}</a></td><td>{{ l.warehouse.code }}</td><td>{{ l.description|default:l.product.name }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|money }}</td><td class="num">{% if l.discount_pct %}{{ l.discount_pct|pct }}{% endif %}</td><td class="num">{{ l.amount|money }}</td>{% if object.status in 'quote,pending,confirmed,partial,backorder' %}<td class="num" title="On hand in {{ l.warehouse.code }}">{% if r.stock < l.qty_to_ship %}<span class="badge badge-overdue">{{ r.stock|qty }}</span>{% else %}{{ r.stock|qty }}{% endif %}</td>{% endif %}<td class="num">{{ l.qty_shipped|qty }}</td><td class="num">{{ l.qty_invoiced|qty }}</td></tr>{% endwith %}{% endfor %}
+<thead><tr><th></th><th>Product</th><th>Warehouse</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Disc</th><th class="num">Amount</th>{% if object.status in 'quote,pending,confirmed,partial,backorder' %}<th class="num">In stock</th>{% endif %}<th class="num">Shipped</th><th class="num">Invoiced</th></tr></thead><tbody>
+{% for r in lines %}{% with l=r.line %}<tr><td>{% with img=l.product.primary_image %}{% if img %}<a href="{% url 'products:image' img.pk %}" target="_blank"><img class="line-thumb" src="{{ img.thumb_url }}" alt="" loading="lazy"></a>{% endif %}{% endwith %}</td><td><a href="{{ l.product.get_absolute_url }}">{{ l.product.sku }}</a></td><td>{{ l.warehouse.code }}</td><td>{{ l.description|default:l.product.name }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|money }}</td><td class="num">{% if l.discount_pct %}{{ l.discount_pct|pct }}{% endif %}</td><td class="num">{{ l.amount|money }}</td>{% if object.status in 'quote,pending,confirmed,partial,backorder' %}<td class="num" title="On hand in {{ l.warehouse.code }}">{% if r.stock < l.qty_to_ship %}<span class="badge badge-overdue">{{ r.stock|qty }}</span>{% else %}{{ r.stock|qty }}{% endif %}</td>{% endif %}<td class="num">{{ l.qty_shipped|qty }}</td><td class="num">{{ l.qty_invoiced|qty }}</td></tr>{% endwith %}{% endfor %}
 </tbody></table>
 <div class="totals" style="padding:12px 16px">
   <div><span>Subtotal</span><span>{{ object.subtotal|money }}</span></div>
@@ -36,5 +58,6 @@
   <div class="card table-wrap"><h3>Invoices</h3><table class="table compact"><tbody>
   {% for i in invoices %}<tr><td><a href="{{ i.get_absolute_url }}">{{ i.number }}</a></td><td>{% status_badge i %}</td><td class="num">{{ i.total|money }}</td></tr>{% empty %}<tr><td class="empty">None yet.</td></tr>{% endfor %}</tbody></table></div>
 </div>
-{% if object.shipping_address or object.notes %}<div class="grid-2">{% if object.shipping_address %}<div class="card"><h3>Ship to</h3>{{ object.shipping_address|linebreaksbr }}</div>{% endif %}{% if object.notes %}<div class="card"><h3>Notes</h3>{{ object.notes|linebreaksbr }}</div>{% endif %}</div>{% endif %}
+{% if object.notes %}<div class="card"><h3>Order notes (printed on the order)</h3>{{ object.notes|linebreaksbr }}</div>{% endif %}
+{% notes_and_files object %}
 {% endblock %}

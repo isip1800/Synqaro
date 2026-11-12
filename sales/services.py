@@ -12,7 +12,9 @@ def credit_check(order):
     customer = order.customer
     if not customer.credit_limit:
         return None
-    exposure = customer.balance + customer.open_orders_value + order.total
+    others = sum((o.uninvoiced_total for o in customer.sales_orders.filter(status__in=SalesOrder.OPEN_STATUSES)
+                  .exclude(pk=order.pk).prefetch_related("lines")), ZERO)
+    exposure = customer.balance + others + order.uninvoiced_total
     if exposure > customer.credit_limit:
         return (f"Credit limit exceeded for {customer}: limit {customer.credit_limit:,.2f}, "
                 f"exposure with this order {exposure:,.2f}.")
@@ -95,6 +97,8 @@ def ship_order(order, quantities, date, carrier="", tracking_number="", user=Non
     order = SalesOrder.objects.select_for_update().get(pk=order.pk)
     if order.status not in SalesOrder.SHIPPABLE_STATUSES:
         raise ValidationError("Order must be open (confirmed and approved) before shipping.")
+    if order.on_hold:
+        raise ValidationError(f"Order is on hold ({order.hold_reason or 'no reason given'}). Remove the hold first.")
     by_wh = {}
     for line in order.lines.select_related("product", "warehouse").order_by("warehouse__code", "id"):
         qty = quantities.get(line.pk) or ZERO
@@ -153,14 +157,87 @@ def create_invoice_from_order(order, invoice_date):
 
 
 def copy_order_defaults(order):
-    """Fill defaults from customer when creating an order."""
+    """Fill defaults from the customer; the ship-to address always follows the ship-to location."""
     customer = order.customer
     if not order.sales_rep_id and customer.sales_rep_id:
         order.sales_rep = customer.sales_rep
-    if not order.shipping_address:
+    if not order.ship_to_id:
+        order.ship_to = customer.default_location
+    if order.ship_to_id:
+        order.shipping_address = order.ship_to.full_address
+    elif not order.shipping_address:
         order.shipping_address = customer.shipping_address or customer.full_address
     if customer.tax_exempt:
         order.tax_rate = ZERO
+
+
+def release_to_warehouse(order, user=None):
+    """Mark the order as transmitted to the warehouse; it can no longer be edited (recall it first)."""
+    from django.utils import timezone
+
+    if order.status not in SalesOrder.SHIPPABLE_STATUSES:
+        raise ValidationError("Only open (approved) orders can be released to the warehouse.")
+    if order.on_hold:
+        raise ValidationError("Remove the hold before releasing to the warehouse.")
+    if order.released_at:
+        raise ValidationError("Order is already released.")
+    order.released_at = timezone.now()
+    order.released_by = user if getattr(user, "is_authenticated", False) else None
+    order.save(update_fields=["released_at", "released_by"])
+    return order
+
+
+def recall_from_warehouse(order, user=None):
+    if not order.released_at:
+        raise ValidationError("Order has not been released to the warehouse.")
+    order.released_at, order.released_by = None, None
+    order.save(update_fields=["released_at", "released_by"])
+    return order
+
+
+def hold_order(order, reason="", user=None):
+    if order.status in (SalesOrder.CLOSED, SalesOrder.CANCELLED, SalesOrder.SHIPPED):
+        raise ValidationError("Only open orders can be put on hold.")
+    order.on_hold, order.hold_reason = True, (reason or "On hold")[:255]
+    order.save(update_fields=["on_hold", "hold_reason"])
+    return order
+
+
+def release_hold(order, user=None):
+    if not order.on_hold:
+        raise ValidationError("Order is not on hold.")
+    order.on_hold, order.hold_reason = False, ""
+    order.save(update_fields=["on_hold", "hold_reason"])
+    return order
+
+
+def reopen_order(order, user=None):
+    """Cancelled -> back to quotation; shipped / closed -> editable again to add lines or quantity."""
+    if order.status == SalesOrder.CANCELLED:
+        order.status = SalesOrder.QUOTE
+        order.save(update_fields=["status"])
+    elif order.status in (SalesOrder.SHIPPED, SalesOrder.CLOSED):
+        order.reopened = True
+        order.save(update_fields=["reopened"])
+    else:
+        raise ValidationError("Only cancelled, shipped or closed orders can be reopened.")
+    return order
+
+
+def after_order_edit(order):
+    """Re-evaluate status after an order was edited (lines added / changed)."""
+    if order.status in (SalesOrder.QUOTE, SalesOrder.PENDING, SalesOrder.CANCELLED):
+        return order
+    order.reopened = False
+    order.save(update_fields=["reopened"])
+    order.refresh_status()
+    if order.status == SalesOrder.CONFIRMED and not order.credit_override:
+        problem = credit_check(order)
+        if problem:
+            order.status = SalesOrder.PENDING
+            order.approval_reason = ("Edited order: " + problem)[:255]
+            order.save(update_fields=["status", "approval_reason"])
+    return order
 
 
 __all__ = ["SalesOrderLine", "confirm_order", "cancel_order", "create_delivery", "create_invoice_from_order"]

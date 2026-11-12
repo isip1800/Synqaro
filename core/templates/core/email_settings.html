@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><h1>Email</h1><div class="actions"><a class="btn" href="{% url 'core:email_log' %}">Email log</a></div></div>
+<div class="card">
+  <h3>Connection {% if configured %}<span class="badge badge-paid">connected</span>{% else %}<span class="badge badge-partial">not set up</span>{% endif %}</h3>
+  {% if configured %}<p>Sending through <strong>{{ host }}:{{ port }}</strong> as <strong>{{ from_email }}</strong>{% if user_name %} (login {{ user_name }}){% endif %}.</p>
+  {% else %}<p>Emails are saved to the log but not sent until a mail server is connected. In Render → <em>synqaro</em> → <em>Environment</em>, add:</p>
+  <table class="table compact" style="max-width:720px"><tbody>
+    <tr><td><code>EMAIL_HOST</code></td><td>e.g. <code>smtp.office365.com</code> (Microsoft 365) · <code>smtp.gmail.com</code> (Google Workspace) · <code>smtp.sendgrid.net</code></td></tr>
+    <tr><td><code>EMAIL_PORT</code></td><td><code>587</code></td></tr>
+    <tr><td><code>EMAIL_HOST_USER</code></td><td>the mailbox / API user, e.g. <code>orders@yourcompany.com</code></td></tr>
+    <tr><td><code>EMAIL_HOST_PASSWORD</code></td><td>its password or app password (mark it secret in Render)</td></tr>
+    <tr><td><code>DEFAULT_FROM_EMAIL</code></td><td>the From address, e.g. <code>Your Company &lt;orders@yourcompany.com&gt;</code></td></tr>
+  </tbody></table>{% endif %}
+</div>
+<div class="card table-wrap"><div class="section-title" style="padding:14px 16px 0"><h3>Templates</h3></div>
+<table class="table"><thead><tr><th>Document</th><th>Subject</th><th>PDF</th><th>Always CC</th></tr></thead><tbody>
+{% for t in templates %}<tr><td><a href="{% url 'core:emailtemplate_update' t.pk %}">{{ t.get_kind_display }}</a></td><td>{{ t.subject }}</td><td>{% if t.attach_pdf %}✓{% endif %}</td><td>{{ t.cc }}</td></tr>{% endfor %}
+</tbody></table><p class="muted" style="padding:0 16px 12px">Placeholders such as {number}, {customer}, {buyer}, {customer_po}, {total}, {ship_start}, {cancel_date} are filled in automatically.</p></div>
+<div class="card table-wrap"><h3>Recent emails</h3><table class="table compact"><tbody>
+{% for e in recent %}<tr><td>{{ e.created_at|date:"Y-m-d H:i" }}</td><td>{{ e.document }}</td><td>{{ e.to }}</td><td>{{ e.subject }}</td><td>{{ e.get_status_display }}</td></tr>{% empty %}<tr><td class="empty">Nothing sent yet.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

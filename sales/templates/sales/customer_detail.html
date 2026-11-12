@@ -6,6 +6,7 @@
     <a class="btn btn-primary" href="{% url 'sales:salesorder_create' %}?customer={{ object.pk }}">+ Quote / order</a>
     <a class="btn" href="{% url 'accounting:customerpayment_create' %}?customer={{ object.pk }}">+ Payment</a>
     <a class="btn" href="{% url 'sales:customer_statement' object.pk %}">Statement</a>
+    <a class="btn" href="{% url 'core:email_compose' 'statement' object.pk %}">✉ Email statement</a>
     <a class="btn" href="{% url 'sales:customer_update' object.pk %}">Edit</a>
   </div>
 </div>
@@ -31,6 +32,14 @@
   {% for p in payments %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a></td><td>{{ p.date|date:"Y-m-d" }}</td><td>{{ p.get_method_display }}</td><td class="num">{{ p.amount|money }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}
   </tbody></table></div>
 </div>
+<div class="card table-wrap" id="locations"><div class="section-title" style="padding:14px 16px 0"><h3>Locations (ship-to) · {{ object.locations.count }}</h3>
+  <div class="actions"><a class="btn btn-sm" href="{% url 'sales:locations_export' object.pk %}">⬇ Export / template</a>
+  <form method="post" enctype="multipart/form-data" action="{% url 'sales:locations_import' object.pk %}" class="inline-form">{% csrf_token %}<input type="file" name="file" accept=".xlsx" required style="width:auto"><button class="btn btn-sm">⬆ Import</button></form>
+  <a class="btn btn-sm btn-primary" href="{% url 'sales:location_create' object.pk %}">+ Location</a></div></div>
+<table class="table compact"><thead><tr><th>Active</th><th>Location ID</th><th>Location name</th><th>City</th><th>State</th><th>Country</th><th>Default</th><th></th></tr></thead><tbody>
+{% for loc in object.locations.all %}<tr><td>{% if loc.is_active %}✓{% else %}—{% endif %}</td><td><a href="{% url 'sales:location_update' loc.pk %}">{{ loc.location_id }}</a></td><td>{{ loc.name }}</td><td>{{ loc.city }}</td><td>{{ loc.state }}</td><td>{{ loc.country }}</td><td>{% if loc.is_default %}✓{% endif %}</td>
+<td><form method="post" action="{% url 'sales:location_delete' loc.pk %}" class="inline" onsubmit="return confirm('Delete {{ loc }}?')">{% csrf_token %}<button class="link" title="Delete">✕</button></form></td></tr>
+{% empty %}<tr><td colspan="8" class="empty">No locations.</td></tr>{% endfor %}</tbody></table></div>
 <div class="card table-wrap"><div class="section-title" style="padding:14px 16px 0"><h3>Buyers</h3><a class="btn btn-sm" href="{% url 'sales:customer_update' object.pk %}">Add / edit buyers</a></div>
 <table class="table compact"><thead><tr><th>Name</th><th>Title</th><th>Email</th><th>Phone</th><th class="num">Open orders</th></tr></thead><tbody>
 {% for b in object.buyers.all %}<tr><td>{{ b.name }}{% if not b.is_active %} <span class="badge">inactive</span>{% endif %}</td><td>{{ b.title }}</td><td>{% if b.email %}<a href="mailto:{{ b.email }}">{{ b.email }}</a>{% endif %}</td><td>{{ b.phone }}</td><td class="num">{{ b.open_order_count }}</td></tr>
@@ -38,4 +47,5 @@
 <div class="card"><h3>Contact</h3><dl class="dl-grid">
   <div><dt>Contact</dt><dd>{{ object.contact_name|default:"—" }}</dd></div><div><dt>Email</dt><dd>{{ object.email|default:"—" }}</dd></div><div><dt>Phone</dt><dd>{{ object.phone|default:"—" }}</dd></div><div><dt>Tax ID</dt><dd>{{ object.tax_id|default:"—" }}</dd></div><div><dt>Ship to</dt><dd>{{ object.shipping_address|default:object.full_address|linebreaksbr }}</dd></div></dl>
   {% if object.notes %}<p>{{ object.notes|linebreaksbr }}</p>{% endif %}</div>
+{% notes_and_files object %}
 {% endblock %}
