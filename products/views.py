@@ -89,7 +89,8 @@ class ProductList(ErpListView):
 @internal_required
 def product_export(request):
     products = list(filtered_products(request).prefetch_related("images", "quants"))
-    data = services.export_products_xlsx(products)
+    mode = "float" if request.GET.get("images") == "float" else "cell"
+    data = services.export_products_xlsx(products, image_mode=mode)
     resp = HttpResponse(data, content_type=XLSX)
     resp["Content-Disposition"] = f'attachment; filename="products-{datetime.date.today():%Y%m%d}.xlsx"'
     return resp

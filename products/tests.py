@@ -134,6 +134,32 @@ class ProductSetupTests(TestCase):
         names = zipfile.ZipFile(io.BytesIO(data)).namelist()
         self.assertTrue(any(n.startswith("xl/media/") for n in names))
         self.assertIn("xl/richData/rdrichvalue.xml", names)  # Excel "Place in Cell" picture
+        # Excel rejects zip part names starting with '/' ("We found a problem with some content")
+        self.assertFalse([n for n in names if n.startswith("/")])
+        self.assertIn("xl/richData/_rels/richValueRel.xml.rels", names)
+        from openpyxl import load_workbook
+
+        ws = load_workbook(io.BytesIO(data)).active
+        self.assertEqual(ws["B2"].value, p.sku)
+
+    def test_floating_image_export_for_older_excel(self):
+        import zipfile
+
+        p = self.make()
+        services.add_image(p, SimpleUploadedFile("a.png", png_bytes(), content_type="image/png"))
+        names = zipfile.ZipFile(io.BytesIO(services.export_products_xlsx([p], image_mode="float"))).namelist()
+        self.assertIn("xl/drawings/drawing1.xml", names)
+        self.assertFalse([n for n in names if n.startswith("/") or "richData" in n])
+
+    def test_sanitize_repairs_leading_slash_parts(self):
+        import zipfile
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("/xl/bad.xml", "x")
+            z.writestr("xl/good.xml", "y")
+        fixed = zipfile.ZipFile(io.BytesIO(services._sanitize_xlsx(buf.getvalue())))
+        self.assertEqual(sorted(fixed.namelist()), ["xl/bad.xml", "xl/good.xml"])
 
     def test_hts_export_import_round_trip(self):
         data = services.export_hts_xlsx(list(HTSCode.objects.all()))

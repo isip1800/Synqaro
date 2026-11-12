@@ -102,17 +102,44 @@ def generate_upc(product):
 
 # ----------------------------------------------------------------------------- Excel export
 
+def _new_workbook(out):
+    """XlsxWriter workbook writing via temp files.
+
+    XlsxWriter's in_memory mode names one embedded-image part with a leading slash
+    ('/xl/richData/_rels/...'), which Excel rejects as a corrupt file.
+    """
+    import xlsxwriter
+
+    return xlsxwriter.Workbook(out, {"in_memory": False})
+
+
+def _sanitize_xlsx(data):
+    """Guarantee valid zip part names (no leading '/'), repacking only if needed."""
+    import zipfile
+
+    src = zipfile.ZipFile(io.BytesIO(data))
+    if not any(n.startswith("/") for n in src.namelist()):
+        return data
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as dst:
+        for info in src.infolist():
+            dst.writestr(info.filename.lstrip("/"), src.read(info.filename))
+    return out.getvalue()
+
+
 def _lv(v):
     return str(v) if v else ""
 
 
-def export_products_xlsx(products):
-    """Product list as .xlsx with the primary image embedded *in* the first cell (Excel 'Place in Cell')."""
-    import xlsxwriter
+def export_products_xlsx(products, image_mode="cell"):
+    """Product list as .xlsx with each item's main image in the first column.
 
+    image_mode="cell":  picture placed *in* the cell (Excel 365 / 2021+ "Place in Cell").
+    image_mode="float": picture floating over the cell, moving/sizing with it (works in every Excel version).
+    """
     company = Company.get()
     out = io.BytesIO()
-    wb = xlsxwriter.Workbook(out, {"in_memory": True})
+    wb = _new_workbook(out)
     ws = wb.add_worksheet("Products")
     head = wb.add_format({"bold": True, "bg_color": "#E8ECF2", "border": 1, "text_wrap": True, "valign": "top"})
     cell = wb.add_format({"valign": "vcenter", "text_wrap": True})
@@ -139,7 +166,15 @@ def export_products_xlsx(products):
         ws.set_row(r, 75)
         img = p.primary_image
         if img:
-            ws.embed_image(r, 0, f"{p.sku}.jpg", {"image_data": io.BytesIO(bytes(img.thumbnail))})
+            data = io.BytesIO(bytes(img.thumbnail))
+            if image_mode == "float":
+                # Row is 75pt (100px), column 14 chars (~103px): fit the thumbnail inside with a small margin
+                longest = max(img.width, img.height) or 1
+                scale = 92 / min(THUMB_SIZE, longest) if longest < THUMB_SIZE else 92 / THUMB_SIZE
+                ws.insert_image(r, 0, f"{p.sku}.jpg", {"image_data": data, "x_scale": scale, "y_scale": scale,
+                                                       "x_offset": 4, "y_offset": 4, "object_position": 1})
+            else:
+                ws.embed_image(r, 0, f"{p.sku}.jpg", {"image_data": data})
         ic = p.item_class
         values = [
             p.sku, p.name, ic.full_code if ic else "",
@@ -155,7 +190,7 @@ def export_products_xlsx(products):
             ws.write(r, c, v, columns[c][2])
     ws.autofilter(0, 0, max(len(products), 1), len(columns) - 1)
     wb.close()
-    return out.getvalue()
+    return _sanitize_xlsx(out.getvalue())
 
 
 # ----------------------------------------------------------------------------- HTS table import / export
@@ -164,10 +199,8 @@ HTS_HEADERS = ["Item Class", "Material", "Gender", "HTS Code", "Duty Rate", "Tar
 
 
 def export_hts_xlsx(rows):
-    import xlsxwriter
-
     out = io.BytesIO()
-    wb = xlsxwriter.Workbook(out, {"in_memory": True})
+    wb = _new_workbook(out)
     ws = wb.add_worksheet("HTS Codes")
     head = wb.add_format({"bold": True, "bg_color": "#E8ECF2", "border": 1})
     for c, (title, width) in enumerate(zip(HTS_HEADERS, [34, 22, 10, 16, 10, 10, 30])):
@@ -178,7 +211,7 @@ def export_hts_xlsx(rows):
                             float(h.duty_rate), float(h.tariff_rate), h.notes])
     ws.freeze_panes(1, 0)
     wb.close()
-    return out.getvalue()
+    return _sanitize_xlsx(out.getvalue())
 
 
 def _item_class_by_code(full_code):
