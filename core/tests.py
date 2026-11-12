@@ -37,7 +37,15 @@ def walk(patterns, prefix=""):
 class SmokeTests(TestCase):
     @classmethod
     def setUpTestData(cls):
+        from core.models import Company
+
+        Company.clear_cache()
         call_command("seed_demo", stdout=io.StringIO())
+
+    def setUp(self):
+        from core.models import Company
+
+        Company.clear_cache()
 
     def test_demo_books_balance(self):
         tb = trial_balance()

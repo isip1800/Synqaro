@@ -46,7 +46,7 @@ class StockMove(models.Model):
         (TRANSFER_IN, "Transfer in"),
         (TRANSFER_OUT, "Transfer out"),
     ]
-    date = models.DateField()
+    date = models.DateField(db_index=True)
     product = models.ForeignKey("products.Product", on_delete=models.PROTECT, related_name="moves")
     warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name="moves")
     quantity = models.DecimalField(max_digits=14, decimal_places=3, help_text="Positive in, negative out")

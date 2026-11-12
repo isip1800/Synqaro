@@ -35,21 +35,32 @@ def _dashboard(request):
     sales_mtd = sum((i.subtotal for i in month_invoices), ZERO)
     margin_mtd = sum((i.gross_margin for i in month_invoices), ZERO)
 
-    open_ar = list(CustomerInvoice.objects.filter(status__in=CustomerInvoice.OPEN_STATUSES)
-                   .select_related("customer").prefetch_related("lines"))
-    ar_total = sum((i.balance_due for i in open_ar), ZERO)
-    overdue = [i for i in open_ar if i.due_date and i.due_date < today]
-    open_ap = list(VendorBill.objects.filter(status__in=VendorBill.OPEN_STATUSES).prefetch_related("lines"))
-    ap_total = sum((b.balance_due_base for b in open_ap), ZERO)
-    ap_due_week = sum((b.balance_due_base for b in open_ap
-                       if b.due_date and b.due_date <= today + datetime.timedelta(days=7)), ZERO)
+    from django.db.models import Count, ExpressionWrapper, DecimalField
+
+    open_ar = CustomerInvoice.objects.filter(status__in=CustomerInvoice.OPEN_STATUSES)
+    bal = F("posted_total") - F("amount_paid")
+    ar_total = open_ar.aggregate(t=Sum(bal))["t"] or ZERO
+    overdue_agg = open_ar.filter(due_date__lt=today).aggregate(t=Sum(bal), n=Count("id"))
+    open_ap = VendorBill.objects.filter(status__in=VendorBill.OPEN_STATUSES)
+    bal_base = ExpressionWrapper((F("posted_total") - F("amount_paid")) * F("exchange_rate"),
+                                 output_field=DecimalField(max_digits=20, decimal_places=4))
+    ap_total = open_ap.aggregate(t=Sum(bal_base))["t"] or ZERO
+    ap_due_week = open_ap.filter(due_date__lte=today + datetime.timedelta(days=7)).aggregate(
+        t=Sum(bal_base))["t"] or ZERO
 
     inv_value = StockQuant.objects.aggregate(v=Sum(F("quantity") * F("product__avg_cost")))["v"] or ZERO
     shipments = (Shipment.objects.exclude(status__in=[Shipment.RECEIVED, Shipment.CANCELLED])
                  .select_related("vendor").order_by("eta")[:8])
+    from inventory import availability
+
+    candidates = list(Product.objects.filter(is_active=True, reorder_point__gt=0).select_related("preferred_vendor"))
+    data = availability.compute([p.pk for p in candidates]) if candidates else {}
     low_stock = []
-    for p in Product.objects.filter(is_active=True, reorder_point__gt=0):
-        if p.qty_on_hand + p.qty_on_order <= p.reorder_point:
+    for p in candidates:
+        b = data[p.pk]
+        on_order = b["po_open"] + b["booked"] + b["booked_approved"] + b["in_transit"] + b["po_new"]
+        if b["on_hand"] + on_order <= p.reorder_point:
+            p.dash_on_hand, p.dash_on_order = b["on_hand"], on_order
             low_stock.append(p)
 
     ctx = {
@@ -57,8 +68,8 @@ def _dashboard(request):
         "margin_mtd": margin_mtd,
         "margin_pct": (margin_mtd / sales_mtd * 100) if sales_mtd else None,
         "ar_total": ar_total,
-        "overdue_count": len(overdue),
-        "overdue_total": sum((i.balance_due for i in overdue), ZERO),
+        "overdue_count": overdue_agg["n"],
+        "overdue_total": overdue_agg["t"] or ZERO,
         "ap_total": ap_total,
         "ap_due_week": ap_due_week,
         "inv_value": inv_value,

@@ -61,7 +61,7 @@ class JournalEntry(NumberedMixin):
         ("stock_adjustment", "Stock adjustment"),
         ("commission", "Commission"),
     ]
-    date = models.DateField()
+    date = models.DateField(db_index=True)
     memo = models.CharField(max_length=255, blank=True)
     source = models.CharField(max_length=20, choices=SOURCES, default="manual")
     reference = models.CharField(max_length=60, blank=True)
@@ -117,8 +117,10 @@ class CustomerInvoice(NumberedMixin):
     due_date = models.DateField(null=True, blank=True)
     tax_rate = models.DecimalField("Tax %", max_digits=6, decimal_places=3, default=ZERO)
     notes = models.TextField(blank=True)
-    status = models.CharField(max_length=10, choices=STATUSES, default=DRAFT, editable=False)
+    status = models.CharField(max_length=10, choices=STATUSES, default=DRAFT, editable=False, db_index=True)
     amount_paid = models.DecimalField(max_digits=14, decimal_places=2, default=ZERO, editable=False)
+    posted_total = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True, editable=False,
+                                       help_text="Invoice total frozen when posted (posted invoices never change)")
     journal_entry = models.ForeignKey(JournalEntry, null=True, blank=True, on_delete=models.SET_NULL,
                                       editable=False)
 
@@ -139,6 +141,8 @@ class CustomerInvoice(NumberedMixin):
 
     @property
     def total(self):
+        if self.posted_total is not None:
+            return self.posted_total
         return self.subtotal + self.tax
 
     @property
@@ -238,10 +242,12 @@ class VendorBill(NumberedMixin):
     currency = models.ForeignKey("core.Currency", on_delete=models.PROTECT)
     exchange_rate = models.DecimalField(max_digits=18, decimal_places=6, default=Decimal("1"))
     notes = models.TextField(blank=True)
-    status = models.CharField(max_length=10, choices=STATUSES, default=DRAFT, editable=False)
+    status = models.CharField(max_length=10, choices=STATUSES, default=DRAFT, editable=False, db_index=True)
     amount_paid = models.DecimalField(max_digits=14, decimal_places=2, default=ZERO, editable=False,
                                       help_text="In bill currency")
     submitted_via_portal = models.BooleanField(default=False, editable=False)
+    posted_total = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True, editable=False,
+                                       help_text="Bill total (bill currency) frozen when posted")
     journal_entry = models.ForeignKey(JournalEntry, null=True, blank=True, on_delete=models.SET_NULL,
                                       editable=False)
 
@@ -254,6 +260,8 @@ class VendorBill(NumberedMixin):
 
     @property
     def total(self):
+        if self.posted_total is not None:
+            return self.posted_total
         return money(sum((line.amount for line in self.lines.all()), ZERO))
 
     @property

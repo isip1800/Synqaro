@@ -37,7 +37,7 @@
 <div class="card table-wrap">
   <div class="section-title" style="padding:14px 16px 0"><h3>Low stock ({{ low_stock_count }})</h3><a href="{% url 'inventory:reorder' %}">Reorder report →</a></div>
   <table class="table compact"><thead><tr><th>Product</th><th class="num">On hand</th><th class="num">On order</th><th class="num">Reorder point</th><th>Preferred vendor</th></tr></thead><tbody>
-  {% for p in low_stock %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p }}</a></td><td class="num">{{ p.qty_on_hand|qty }}</td><td class="num">{{ p.qty_on_order|qty }}</td><td class="num">{{ p.reorder_point|qty }}</td><td>{{ p.preferred_vendor|default:"—" }}</td></tr>
+  {% for p in low_stock %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p }}</a></td><td class="num">{{ p.dash_on_hand|qty }}</td><td class="num">{{ p.dash_on_order|qty }}</td><td class="num">{{ p.reorder_point|qty }}</td><td>{{ p.preferred_vendor|default:"—" }}</td></tr>
   {% empty %}<tr><td colspan="5" class="empty">All stock above reorder points.</td></tr>{% endfor %}
   </tbody></table>
 </div>

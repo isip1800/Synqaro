@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% load erp %}
 {% block content %}
-<div class="page-head"><div><h1>{{ title }}</h1><div class="sub">{{ row_count }} item{{ row_count|pluralize }}{% if wh %} · selected warehouse{% else %} · all warehouses{% endif %}. Click a number to see the orders and shipments behind it.{% if floored %} Columns marked ≥0 show 0 instead of negatives (<a href="{% url 'core:company' %}">change</a>).{% endif %}</div></div>
+<div class="page-head"><div><h1>{{ title }}</h1><div class="sub">{{ row_count }} item{{ row_count|pluralize }}{% if is_paginated %} (100 per page; totals are for all){% endif %}{% if wh %} · selected warehouse{% else %} · all warehouses{% endif %}. Click a number to see the orders and shipments behind it.{% if floored %} Columns marked ≥0 show 0 instead of negatives (<a href="{% url 'core:company' %}">change</a>).{% endif %}</div></div>
   <div class="actions">
     {% include "core/_chooser.html" %}
     <a class="btn" href="{% url 'inventory:availability_definitions' %}">ⓘ Bucket definitions</a>
@@ -38,4 +38,5 @@
   </tbody>
   <tfoot><tr><td class="pin pin-img"></td><td class="pin pin-sku">Total</td>{% for c, v in totals %}<td class="{% if c.kind == 'bucket' %}num{% endif %} {% if c.start %}g-start{% endif %} {% if v and v < 0 %}neg{% endif %}">{% if v is not None %}{{ v|qty }}{% endif %}</td>{% endfor %}</tr></tfoot>
 </table></div>
+{% include "core/_pagination.html" %}
 {% endblock %}

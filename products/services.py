@@ -164,7 +164,9 @@ def export_products_xlsx(products, image_mode="cell"):
     ws.freeze_panes(1, 2)
     for r, p in enumerate(products, start=1):
         ws.set_row(r, 75)
-        img = p.primary_image
+        imgs = getattr(p, "export_images", None)
+        img = (next((i for i in imgs if i.is_primary), imgs[0] if imgs else None)
+               if imgs is not None else p.primary_image)
         if img:
             data = io.BytesIO(bytes(img.thumbnail))
             if image_mode == "float":
@@ -184,7 +186,8 @@ def export_products_xlsx(products, image_mode="cell"):
             _lv(p.customer_code), p.hs_code, float(p.duty_rate), float(p.tariff_rate), p.prepack_qty, p.carton_qty,
             float(p.carton_cbm), float(p.carton_cuft),
         ] + [p.qty_per(cbm) or "" for _, cbm in company.containers] + [
-            p.barcode, float(p.qty_on_hand), float(p.avg_cost), float(p.list_price),
+            p.barcode, float(getattr(p, "export_on_hand", None) if hasattr(p, "export_on_hand") else p.qty_on_hand),
+            float(p.avg_cost), float(p.list_price),
         ]
         for c, v in enumerate(values, start=1):
             ws.write(r, c, v, columns[c][2])

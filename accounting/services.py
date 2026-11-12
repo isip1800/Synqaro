@@ -156,7 +156,8 @@ def post_customer_invoice(invoice, user=None):
         journal.append({"account": acct("SALES_TAX"), "credit": tax, "description": f"Tax {invoice.number}"})
     invoice.journal_entry = post_journal(invoice.invoice_date, f"Invoice {invoice.number} — {invoice.customer}",
                                          journal, "customer_invoice", invoice.number, user)
-    invoice.status = CustomerInvoice.POSTED if invoice.total > 0 else CustomerInvoice.PAID
+    invoice.posted_total = invoice.subtotal + tax
+    invoice.status = CustomerInvoice.POSTED if invoice.posted_total > 0 else CustomerInvoice.PAID
     invoice.save()
     if invoice.sales_order_id:
         invoice.sales_order.refresh_status()
@@ -282,6 +283,7 @@ def post_vendor_bill(bill, user=None):
         bill.due_date = bill.bill_date + datetime.timedelta(days=bill.vendor.payment_terms_days)
     bill.journal_entry = post_journal(bill.bill_date, f"Bill {bill.vendor_invoice_number} — {bill.vendor}",
                                       journal, "vendor_bill", bill.number, user)
+    bill.posted_total = money(sum((line.amount for line in lines), ZERO))
     bill.status = VendorBill.POSTED
     bill.save()
     return bill
@@ -456,13 +458,13 @@ def _aging(docs, as_of, party_attr, amount_fn, due_fn):
 
 def ar_aging(as_of):
     docs = CustomerInvoice.objects.filter(status__in=CustomerInvoice.OPEN_STATUSES, invoice_date__lte=as_of) \
-        .select_related("customer").prefetch_related("lines")
+        .select_related("customer")
     return _aging(docs, as_of, "customer", lambda d: d.balance_due, lambda d: d.due_date or d.invoice_date)
 
 
 def ap_aging(as_of):
     docs = VendorBill.objects.filter(status__in=VendorBill.OPEN_STATUSES, bill_date__lte=as_of) \
-        .select_related("vendor").prefetch_related("lines")
+        .select_related("vendor")
     return _aging(docs, as_of, "vendor", lambda d: d.balance_due_base, lambda d: d.due_date or d.bill_date)
 
 

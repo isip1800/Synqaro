@@ -37,7 +37,8 @@ def filtered_products(request):
     qs = Product.objects.select_related(
         "item_class__parent__parent", "brand", "season", "gender", "material", "customer_code", "package_size",
         "size_range", "size_breakdown", "preferred_vendor",
-    ).prefetch_related(Prefetch("images", queryset=ProductImage.objects.only("id", "is_primary", "product_id")))
+    ).prefetch_related(Prefetch("images", queryset=ProductImage.objects.only("id", "is_primary", "product_id",
+                                                                             "width", "height")))
     g = request.GET
     q = g.get("q", "").strip()
     if q:
@@ -121,7 +122,10 @@ class ProductList(ErpListView):
 
 @internal_required
 def product_export(request):
-    products = list(filtered_products(request).prefetch_related("images", "quants"))
+    products = list(filtered_products(request).prefetch_related(
+        Prefetch("images", queryset=ProductImage.objects.defer("data"), to_attr="export_images")))
+    for p in products:
+        p.export_on_hand = p.on_hand or 0
     mode = "float" if request.GET.get("images") == "float" else "cell"
     data = services.export_products_xlsx(products, image_mode=mode)
     resp = HttpResponse(data, content_type=XLSX)

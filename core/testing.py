@@ -16,6 +16,7 @@ TODAY = datetime.date(2026, 6, 15)
 
 class Fixture:
     def __init__(self):
+        Company.clear_cache()  # a previous test's rolled-back settings must not leak
         Company.get()
         Currency.objects.get_or_create(code="CNY", defaults={"name": "Yuan"})
         ExchangeRate.objects.create(currency_id="CNY", date=TODAY - datetime.timedelta(days=60), rate=D("0.14"))
