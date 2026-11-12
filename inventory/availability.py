@@ -96,7 +96,7 @@ def compute(product_ids=None, warehouse_id=None):
          "on_hand")
 
     # Sales orders by status
-    so = scope(SalesOrderLine.objects, "order__warehouse_id")
+    so = scope(SalesOrderLine.objects, "warehouse_id")
     _add(result, so.filter(order__status=SalesOrder.QUOTE).values("product_id").annotate(t=Sum("quantity")),
          "so_quote")
     for key, status in (("so_pending", SalesOrder.PENDING), ("so_open", SalesOrder.CONFIRMED),
@@ -107,15 +107,15 @@ def compute(product_ids=None, warehouse_id=None):
          .values("product_id").annotate(t=Sum(F("qty_shipped") - F("qty_invoiced"))), "so_to_invoice")
 
     # Purchase orders
-    po = scope(PurchaseOrderLine.objects, "order__warehouse_id")
+    po = scope(PurchaseOrderLine.objects, "warehouse_id")
     _add(result, po.filter(order__status=PurchaseOrder.DRAFT).values("product_id").annotate(t=Sum("quantity")),
          "po_new")
     _add(result, po.filter(order__status__in=[PurchaseOrder.RECEIVED, PurchaseOrder.CLOSED])
          .values("product_id").annotate(t=Sum("qty_received")), "po_closed")
 
-    # Shipments (active), attributed to the shipment's destination warehouse
+    # Shipments (active), attributed to the warehouse of the PO line they will be received into
     active = ShipmentLine.objects.exclude(shipment__status__in=[Shipment.RECEIVED, Shipment.CANCELLED])
-    sl = scope(active, "shipment__warehouse_id", "po_line__product_id")
+    sl = scope(active, "po_line__warehouse_id", "po_line__product_id")
     booked_q = Q(shipment__status__in=Shipment.BOOKED_STATUSES)
     for key, cond in (("booked", booked_q & Q(shipment__approved=False)),
                       ("booked_approved", booked_q & Q(shipment__approved=True)),
@@ -159,7 +159,7 @@ def detail_rows(product, bucket, warehouse_id=None):
         for q in wh(StockQuant.objects.filter(product=product, quantity__gt=0), "warehouse_id") \
                 .select_related("warehouse"):
             rows.append({"number": q.warehouse.code, "url": q.warehouse.get_absolute_url(), "party": q.warehouse.name,
-                         "date": None, "status": "In stock", "qty": q.quantity})
+                         "date": None, "status": "In stock", "warehouse": q.warehouse.code, "qty": q.quantity})
         return rows
 
     def remaining(ln):
@@ -174,20 +174,20 @@ def detail_rows(product, bucket, warehouse_id=None):
                                 lambda ln: ln.qty_shipped - ln.qty_invoiced)}
     if bucket in so_map:
         statuses, qty = so_map[bucket]
-        for ln in wh(SalesOrderLine.objects.filter(product=product, order__status__in=statuses), "order__warehouse_id") \
-                .select_related("order__customer").order_by("order__requested_date", "order__order_date"):
+        for ln in wh(SalesOrderLine.objects.filter(product=product, order__status__in=statuses), "warehouse_id") \
+                .select_related("order__customer", "warehouse").order_by("order__requested_date", "order__order_date"):
             if qty(ln) > 0:
                 o = ln.order
                 rows.append({"number": o.number, "url": o.get_absolute_url(), "party": o.customer.name,
                              "date": o.requested_date or o.order_date, "status": o.get_status_display(),
-                             "qty": qty(ln)})
+                             "warehouse": ln.warehouse.code, "qty": qty(ln)})
         return rows
 
     if bucket in ("po_new", "po_open", "po_closed"):
         statuses = {"po_new": [PurchaseOrder.DRAFT], "po_open": list(PurchaseOrder.OPEN_STATUSES),
                     "po_closed": [PurchaseOrder.RECEIVED, PurchaseOrder.CLOSED]}[bucket]
         for ln in wh(PurchaseOrderLine.objects.filter(product=product, order__status__in=statuses),
-                     "order__warehouse_id").select_related("order__vendor").order_by("order__expected_date"):
+                     "warehouse_id").select_related("order__vendor", "warehouse").order_by("order__expected_date"):
             if bucket == "po_new":
                 q = ln.quantity
             elif bucket == "po_closed":
@@ -197,7 +197,8 @@ def detail_rows(product, bucket, warehouse_id=None):
             if q > 0:
                 o = ln.order
                 rows.append({"number": o.number, "url": o.get_absolute_url(), "party": o.vendor.name,
-                             "date": o.expected_date or o.order_date, "status": o.get_status_display(), "qty": q})
+                             "date": o.expected_date or o.order_date, "status": o.get_status_display(),
+                             "warehouse": ln.warehouse.code, "qty": q})
         return rows
 
     if bucket in ("booked", "booked_approved", "in_transit"):
@@ -207,12 +208,13 @@ def detail_rows(product, bucket, warehouse_id=None):
         else:
             qs = qs.filter(shipment__status__in=Shipment.BOOKED_STATUSES,
                            shipment__approved=(bucket == "booked_approved"))
-        for ln in wh(qs, "shipment__warehouse_id").select_related("shipment__vendor", "po_line__order") \
-                .order_by("shipment__eta"):
+        for ln in wh(qs, "po_line__warehouse_id").select_related("shipment__vendor", "po_line__order",
+                                                                 "po_line__warehouse").order_by("shipment__eta"):
             s = ln.shipment
             rows.append({"number": s.number, "url": s.get_absolute_url(),
                          "party": f"{s.vendor or ''} · {ln.po_line.order.number}", "date": s.eta,
-                         "status": s.get_status_display(), "qty": ln.quantity})
+                         "status": s.get_status_display(), "warehouse": ln.po_line.warehouse.code,
+                         "qty": ln.quantity})
         return rows
     return rows
 

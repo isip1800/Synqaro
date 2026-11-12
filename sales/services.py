@@ -78,41 +78,55 @@ def cancel_order(order):
 
 @transaction.atomic
 def create_delivery(order, quantities, date, carrier="", tracking_number="", user=None):
-    """Ship goods (quantities: {so_line_id: qty}); relieves inventory at average cost and books COGS."""
+    """Ship goods (quantities: {so_line_id: qty}) from each line's own warehouse.
+
+    Creates one delivery (picking slip) per warehouse; relieves stock at average cost and books COGS.
+    Returns the first delivery; all deliveries are on ``order.deliveries``.
+    """
+    deliveries = ship_order(order, quantities, date, carrier, tracking_number, user)
+    return deliveries[0]
+
+
+@transaction.atomic
+def ship_order(order, quantities, date, carrier="", tracking_number="", user=None):
     from accounting.services import acct, post_journal
     from inventory.services import issue_stock
 
     order = SalesOrder.objects.select_for_update().get(pk=order.pk)
     if order.status not in SalesOrder.SHIPPABLE_STATUSES:
         raise ValidationError("Order must be open (confirmed and approved) before shipping.")
-    delivery = None
-    total_cost = ZERO
-    for line in order.lines.select_related("product"):
+    by_wh = {}
+    for line in order.lines.select_related("product", "warehouse").order_by("warehouse__code", "id"):
         qty = quantities.get(line.pk) or ZERO
         if qty <= 0:
             continue
         if qty > line.qty_to_ship:
             raise ValidationError(f"{line.product.sku}: shipping {qty} exceeds remaining {line.qty_to_ship}.")
-        if delivery is None:
-            delivery = Delivery.objects.create(order=order, warehouse=order.warehouse, date=date, carrier=carrier,
-                                               tracking_number=tracking_number, created_by=user)
-        unit_cost = issue_stock(line.product, order.warehouse, qty, date, delivery.number)
-        DeliveryLine.objects.create(delivery=delivery, so_line=line, quantity=qty, unit_cost=unit_cost)
-        line_cost = money(qty * unit_cost)
-        total_cost += line_cost
-        line.qty_shipped += qty
-        line.cost_shipped += line_cost
-        line.save(update_fields=["qty_shipped", "cost_shipped"])
-    if delivery is None:
+        by_wh.setdefault(line.warehouse, []).append((line, qty))
+    if not by_wh:
         raise ValidationError("Enter a quantity to ship.")
-    delivery.journal_entry = post_journal(
-        date, f"COGS {delivery.number} — {order.number}",
-        [{"account": acct("COGS"), "debit": total_cost}, {"account": acct("INVENTORY"), "credit": total_cost}],
-        "delivery", delivery.number, user,
-    )
-    delivery.save(update_fields=["journal_entry"])
+    deliveries = []
+    for warehouse, items in by_wh.items():
+        delivery = Delivery.objects.create(order=order, warehouse=warehouse, date=date, carrier=carrier,
+                                           tracking_number=tracking_number, created_by=user)
+        total_cost = ZERO
+        for line, qty in items:
+            unit_cost = issue_stock(line.product, warehouse, qty, date, delivery.number)
+            DeliveryLine.objects.create(delivery=delivery, so_line=line, quantity=qty, unit_cost=unit_cost)
+            line_cost = money(qty * unit_cost)
+            total_cost += line_cost
+            line.qty_shipped += qty
+            line.cost_shipped += line_cost
+            line.save(update_fields=["qty_shipped", "cost_shipped"])
+        delivery.journal_entry = post_journal(
+            date, f"COGS {delivery.number} — {order.number} ({warehouse.code})",
+            [{"account": acct("COGS"), "debit": total_cost}, {"account": acct("INVENTORY"), "credit": total_cost}],
+            "delivery", delivery.number, user,
+        )
+        delivery.save(update_fields=["journal_entry"])
+        deliveries.append(delivery)
     order.refresh_status()
-    return delivery
+    return deliveries
 
 
 def create_invoice_from_order(order, invoice_date):

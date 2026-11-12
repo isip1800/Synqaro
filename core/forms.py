@@ -20,6 +20,26 @@ class StyledModelForm(forms.ModelForm):
     formfield_callback = formfield_callback
 
 
+class LineWarehouseForm(StyledModelForm):
+    """Order line with a required warehouse, pre-filled with the default warehouse on new lines."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "warehouse" in self.fields:
+            from inventory.models import Warehouse
+
+            from .models import default_warehouse
+
+            field = self.fields["warehouse"]
+            field.required = True
+            field.queryset = Warehouse.objects.filter(is_active=True) | Warehouse.objects.filter(
+                pk=getattr(self.instance, "warehouse_id", None))
+            if not self.instance.pk and not self.initial.get("warehouse"):
+                wh = default_warehouse()
+                if wh:
+                    self.initial["warehouse"] = wh.pk
+
+
 def model_form(model, fields, form=StyledModelForm):
     return modelform_factory(model, form=form, fields=fields, formfield_callback=formfield_callback)
 

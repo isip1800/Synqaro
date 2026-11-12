@@ -89,7 +89,8 @@ class SalesOrder(NumberedMixin, TimeStamped):
     valid_until = models.DateField(null=True, blank=True, help_text="Quote expiry")
     sales_rep = models.ForeignKey("salesteam.SalesRep", null=True, blank=True, on_delete=models.SET_NULL,
                                   related_name="sales_orders")
-    warehouse = models.ForeignKey("inventory.Warehouse", on_delete=models.PROTECT)
+    warehouse = models.ForeignKey("inventory.Warehouse", on_delete=models.PROTECT, verbose_name="Default warehouse",
+                                  help_text="Pre-fills the warehouse on new lines; each line can ship from its own warehouse")
     customer_po = models.CharField("Customer PO #", max_length=60, blank=True)
     tax_rate = models.DecimalField("Tax %", max_digits=6, decimal_places=3, default=ZERO)
     shipping_address = models.TextField(blank=True)
@@ -159,6 +160,8 @@ class SalesOrder(NumberedMixin, TimeStamped):
 class SalesOrderLine(models.Model):
     order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE, related_name="lines")
     product = models.ForeignKey("products.Product", on_delete=models.PROTECT, related_name="so_lines")
+    warehouse = models.ForeignKey("inventory.Warehouse", on_delete=models.PROTECT, related_name="so_lines",
+                                  help_text="Warehouse this line ships from")
     description = models.CharField(max_length=255, blank=True)
     quantity = models.DecimalField(max_digits=14, decimal_places=3)
     unit_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True,
@@ -176,6 +179,8 @@ class SalesOrderLine(models.Model):
         return f"{self.order.number} / {self.product.sku}"
 
     def save(self, *args, **kwargs):
+        if not self.warehouse_id and self.order_id:
+            self.warehouse_id = self.order.warehouse_id
         if self.unit_price is None and self.product_id:
             from products.models import get_price
 

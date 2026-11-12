@@ -6,9 +6,9 @@
   {% if can_invoice and po.status in 'confirmed,partial,received' %}<a class="btn btn-primary" href="{% url 'portal:invoice_submit' po.pk %}">Submit invoice</a>{% endif %}
   <button class="btn" onclick="window.print()">Print</button>
 </div></div>
-<div class="card table-wrap"><table class="table"><thead><tr><th>Our SKU</th><th>Your SKU</th><th>Description</th><th>HS code</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th><th class="num">Received</th></tr></thead><tbody>
-{% for l in lines %}<tr><td>{{ l.product.sku }}</td><td>{{ vendor_skus|get_item:l.product_id|default:"—" }}</td><td>{{ l.description|default:l.product.name }}</td><td>{{ l.product.hs_code|default:"—" }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|unitcost }}</td><td class="num">{{ l.amount|money }}</td><td class="num">{{ l.qty_received|qty }}</td></tr>{% endfor %}
-</tbody><tfoot><tr><td colspan="6">Total {{ po.currency }}</td><td class="num">{{ po.total|money }}</td><td></td></tr></tfoot></table></div>
+<div class="card table-wrap"><table class="table"><thead><tr><th>Our SKU</th><th>Deliver to</th><th>Your SKU</th><th>Description</th><th>HS code</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th><th class="num">Received</th></tr></thead><tbody>
+{% for l in lines %}<tr><td>{{ l.product.sku }}</td><td>{{ l.warehouse.name }}</td><td>{{ vendor_skus|get_item:l.product_id|default:"—" }}</td><td>{{ l.description|default:l.product.name }}</td><td>{{ l.product.hs_code|default:"—" }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|unitcost }}</td><td class="num">{{ l.amount|money }}</td><td class="num">{{ l.qty_received|qty }}</td></tr>{% endfor %}
+</tbody><tfoot><tr><td colspan="7">Total {{ po.currency }}</td><td class="num">{{ po.total|money }}</td><td></td></tr></tfoot></table></div>
 {% if po.payment_terms or po.notes %}<div class="card"><h3>Terms</h3>{% if po.payment_terms %}<p>{{ po.payment_terms }}</p>{% endif %}{{ po.notes|linebreaksbr }}</div>{% endif %}
 <div class="card"><h3>Order confirmation</h3>
 {% if po.status == 'sent' %}

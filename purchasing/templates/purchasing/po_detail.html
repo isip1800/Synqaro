@@ -2,7 +2,7 @@
 {% block content %}
 <div class="page-head">
   <div><h1>Purchase order {{ object.number }} {% status_badge object %}</h1>
-    <div class="sub"><a href="{{ object.vendor.get_absolute_url }}">{{ object.vendor }}</a> · {{ object.order_date|date:"Y-m-d" }} · {{ object.currency }}{% if object.currency_id != base %} @ {{ object.exchange_rate }}{% endif %}{% if object.incoterm %} · {{ object.incoterm }}{% endif %} · to {{ object.warehouse.code }}</div></div>
+    <div class="sub"><a href="{{ object.vendor.get_absolute_url }}">{{ object.vendor }}</a> · {{ object.order_date|date:"Y-m-d" }} · {{ object.currency }}{% if object.currency_id != base %} @ {{ object.exchange_rate }}{% endif %}{% if object.incoterm %} · {{ object.incoterm }}{% endif %} · default WH {{ object.warehouse.code }}</div></div>
   <div class="actions">
     {% if object.status in 'draft,sent' %}<a class="btn" href="{% url 'purchasing:purchaseorder_update' object.pk %}">Edit</a>{% endif %}
     {% if object.status == 'draft' %}<form method="post" action="{% url 'purchasing:po_send' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Mark sent to vendor</button></form>{% endif %}
@@ -16,10 +16,10 @@
   </div>
 </div>
 <div class="card table-wrap"><table class="table">
-<thead><tr><th>Product</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th><th class="num">On shipments</th><th class="num">Received</th><th class="num">Billed</th></tr></thead><tbody>
-{% for l in lines %}<tr><td><a href="{{ l.product.get_absolute_url }}">{{ l.product.sku }}</a></td><td>{{ l.description|default:l.product.name }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|unitcost }}</td><td class="num">{{ l.amount|money }}</td><td class="num">{{ l.qty_on_shipments|qty }}</td><td class="num">{{ l.qty_received|qty }}</td><td class="num">{{ l.qty_billed|qty }}</td></tr>{% endfor %}
+<thead><tr><th>Product</th><th>Warehouse</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th><th class="num">On shipments</th><th class="num">Received</th><th class="num">Billed</th></tr></thead><tbody>
+{% for l in lines %}<tr><td><a href="{{ l.product.get_absolute_url }}">{{ l.product.sku }}</a></td><td>{{ l.warehouse.code }}</td><td>{{ l.description|default:l.product.name }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|unitcost }}</td><td class="num">{{ l.amount|money }}</td><td class="num">{{ l.qty_on_shipments|qty }}</td><td class="num">{{ l.qty_received|qty }}</td><td class="num">{{ l.qty_billed|qty }}</td></tr>{% endfor %}
 </tbody>
-<tfoot><tr><td colspan="4">Total {{ object.currency }}</td><td class="num">{{ object.total|money }}</td><td colspan="3">{% if object.currency_id != base %}≈ {{ object.total_base|money }} {{ base }}{% endif %}</td></tr></tfoot>
+<tfoot><tr><td colspan="5">Total {{ object.currency }}</td><td class="num">{{ object.total|money }}</td><td colspan="3">{% if object.currency_id != base %}≈ {{ object.total_base|money }} {{ base }}{% endif %}</td></tr></tfoot>
 </table></div>
 <div class="grid-2">
   <div class="card">

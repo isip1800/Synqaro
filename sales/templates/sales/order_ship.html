@@ -1,14 +1,14 @@
 {% extends "base.html" %}{% load erp %}
 {% block content %}
-<div class="page-head"><div><h1>{{ title }}</h1><div class="sub">{{ order.customer }} · from {{ order.warehouse }}</div></div></div>
+<div class="page-head"><div><h1>{{ title }}</h1><div class="sub">{{ order.customer }} · each line ships from its own warehouse; one delivery is created per warehouse</div></div></div>
 <form method="post" class="card">{% csrf_token %}
   <div class="form-grid">
     <label class="field"><span>Ship date</span><input type="date" name="date" value="{{ today|date:'Y-m-d' }}"></label>
     <label class="field"><span>Carrier</span><input name="carrier"></label>
     <label class="field"><span>Tracking #</span><input name="tracking_number"></label>
   </div>
-  <div class="table-wrap"><table class="table"><thead><tr><th>Product</th><th class="num">Ordered</th><th class="num">Shipped</th><th class="num">Remaining</th><th class="num">In stock</th><th>Ship now</th></tr></thead><tbody>
-  {% for r in rows %}<tr><td>{{ r.line.product }}</td><td class="num">{{ r.line.quantity|qty }}</td><td class="num">{{ r.line.qty_shipped|qty }}</td><td class="num">{{ r.line.qty_to_ship|qty }}</td><td class="num">{{ r.stock|qty }}</td><td><input type="number" step="any" min="0" name="qty_{{ r.line.pk }}" value="{{ r.default|qty }}" style="max-width:140px"></td></tr>{% endfor %}
+  <div class="table-wrap"><table class="table"><thead><tr><th>Warehouse</th><th>Product</th><th class="num">Ordered</th><th class="num">Shipped</th><th class="num">Remaining</th><th class="num">In stock (warehouse)</th><th>Ship now</th></tr></thead><tbody>
+  {% for r in rows %}<tr><td><strong>{{ r.line.warehouse.code }}</strong></td><td>{{ r.line.product }}</td><td class="num">{{ r.line.quantity|qty }}</td><td class="num">{{ r.line.qty_shipped|qty }}</td><td class="num">{{ r.line.qty_to_ship|qty }}</td><td class="num">{{ r.stock|qty }}</td><td><input type="number" step="any" min="0" name="qty_{{ r.line.pk }}" value="{{ r.default|qty }}" style="max-width:140px"></td></tr>{% endfor %}
   </tbody></table></div>
   <div class="form-actions"><button class="btn btn-primary">Post delivery</button><a class="btn" href="{{ order.get_absolute_url }}">Cancel</a></div>
 </form>

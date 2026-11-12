@@ -1,4 +1,4 @@
-from core.forms import StyledModelForm, line_formset, model_form
+from core.forms import LineWarehouseForm, line_formset, model_form
 
 from .models import Customer, SalesOrder, SalesOrderLine
 
@@ -12,15 +12,15 @@ ORDER_FIELDS = ["customer", "order_date", "requested_date", "valid_until", "sale
 SalesOrderForm = model_form(SalesOrder, ORDER_FIELDS)
 
 
-class SOLineForm(StyledModelForm):
+class SOLineForm(LineWarehouseForm):
     class Meta:
         model = SalesOrderLine
-        fields = ["product", "description", "quantity", "unit_price", "discount_pct"]
+        fields = ["product", "warehouse", "description", "quantity", "unit_price", "discount_pct"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["product"].queryset = self.fields["product"].queryset.filter(is_active=True)
 
 
-SOLineFormSet = line_formset(SalesOrder, SalesOrderLine, ["product", "description", "quantity", "unit_price",
-                                                          "discount_pct"], extra=4, form=SOLineForm)
+SOLineFormSet = line_formset(SalesOrder, SalesOrderLine, ["product", "warehouse", "description", "quantity",
+                                                          "unit_price", "discount_pct"], extra=4, form=SOLineForm)

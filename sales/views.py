@@ -142,15 +142,16 @@ class OrderDetail(ErpDetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         o = self.object
-        lines = list(o.lines.select_related("product"))
+        lines = list(o.lines.select_related("product", "warehouse"))
         stock = {}
         if o.status in (SalesOrder.QUOTE,) + SalesOrder.RESERVING_STATUSES:
             from inventory.models import StockQuant
 
-            for q in StockQuant.objects.filter(warehouse=o.warehouse, product__in=[ln.product for ln in lines]):
-                stock[q.product_id] = q.quantity
+            for q in StockQuant.objects.filter(product__in=[ln.product for ln in lines]):
+                stock[(q.product_id, q.warehouse_id)] = q.quantity
         ctx.update(
-            lines=[{"line": ln, "stock": stock.get(ln.product_id, d(0))} for ln in lines],
+            lines=[{"line": ln, "stock": stock.get((ln.product_id, ln.warehouse_id), d(0))} for ln in lines],
+            multi_wh=len({ln.warehouse_id for ln in lines}) > 1,
             deliveries=o.deliveries.all(),
             invoices=o.invoices.prefetch_related("lines"),
             credit_warning=services.credit_check(o) if o.status == SalesOrder.QUOTE else None,
@@ -194,25 +195,32 @@ order_invoice = _order_action(
 @internal_required
 def order_ship(request, pk):
     order = get_object_or_404(rep_scope(request, SalesOrder.objects.all()), pk=pk)
-    lines = order.lines.select_related("product")
+    lines = order.lines.select_related("product", "warehouse").order_by("warehouse__code", "id")
     if request.method == "POST":
         quantities = {line.pk: d(request.POST.get(f"qty_{line.pk}")) for line in lines}
         try:
             with transaction.atomic():
-                delivery = services.create_delivery(
+                deliveries = services.ship_order(
                     order, quantities, request.POST.get("date") or datetime.date.today(),
                     request.POST.get("carrier", ""), request.POST.get("tracking_number", ""), request.user,
                 )
-            messages.success(request, f"Delivery {delivery.number} posted.")
-            return redirect(delivery.get_absolute_url())
+            if len(deliveries) == 1:
+                messages.success(request, f"Delivery {deliveries[0].number} posted ({deliveries[0].warehouse.code}).")
+                return redirect(deliveries[0].get_absolute_url())
+            messages.success(request, "Posted one delivery per warehouse: " + ", ".join(
+                f"{dl.number} ({dl.warehouse.code})" for dl in deliveries))
+            return redirect(order.get_absolute_url())
         except ValidationError as exc:
             for m in exc.messages:
                 messages.error(request, m)
     from inventory.models import StockQuant
 
-    stock = {q.product_id: q.quantity for q in StockQuant.objects.filter(warehouse=order.warehouse)}
-    rows = [{"line": ln, "stock": stock.get(ln.product_id, d(0)),
-             "default": min(ln.qty_to_ship, max(stock.get(ln.product_id, d(0)), d(0)))} for ln in lines]
+    stock = {(q.product_id, q.warehouse_id): q.quantity
+             for q in StockQuant.objects.filter(product__in=[ln.product_id for ln in lines])}
+    rows = []
+    for ln in lines:
+        on_hand = stock.get((ln.product_id, ln.warehouse_id), d(0))
+        rows.append({"line": ln, "stock": on_hand, "default": min(ln.qty_to_ship, max(on_hand, d(0)))})
     return render(request, "sales/order_ship.html", {"order": order, "rows": rows, "title": f"Ship {order.number}",
                                                      "today": datetime.date.today()})
 

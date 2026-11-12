@@ -57,7 +57,7 @@ def po_list(request):
 def po_detail(request, pk):
     po = get_object_or_404(_pos(request), pk=pk)
     return render(request, "portal/po_detail.html", {
-        "title": po.number, "po": po, "lines": po.lines.select_related("product"),
+        "title": po.number, "po": po, "lines": po.lines.select_related("product", "warehouse"),
         "vendor_skus": {vp.product_id: vp.vendor_sku for vp in request.vendor.vendor_products.all()},
         "today": datetime.date.today(),
         "can_invoice": request.user.vendor_contact.can_submit_invoices,
@@ -113,7 +113,7 @@ def shipment_form(request, pk=None):
                     raise ValidationError("Add at least one PO line to the shipment.")
                 if first.po_line.order.incoterm and not obj.incoterm:
                     obj.incoterm = first.po_line.order.incoterm
-                obj.warehouse = first.po_line.order.warehouse
+                obj.warehouse = first.po_line.warehouse
                 obj.save()
                 purchasing.validate_shipment_lines(obj)
             messages.success(request, f"Shipment {obj.number} saved. The buyer has been updated.")

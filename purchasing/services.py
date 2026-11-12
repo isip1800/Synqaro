@@ -182,18 +182,19 @@ def receive_shipment(shipment, date, user=None):
     alloc = allocate(shipment, landed_total, lines)
 
     pos = {line.po_line.order_id for line in lines}
+    whs = {line.po_line.warehouse_id for line in lines}
     receipt = GoodsReceipt.objects.create(
         purchase_order=lines[0].po_line.order if len(pos) == 1 else None,
-        shipment=shipment, warehouse=shipment.warehouse, date=date, created_by=user,
+        shipment=shipment, warehouse_id=whs.pop() if len(whs) == 1 else None, date=date, created_by=user,
     )
     goods_total = ZERO
     for line in lines:
         pol = PurchaseOrderLine.objects.select_for_update().get(pk=line.po_line_id)
         unit_goods = cost(pol.unit_price * pol.order.exchange_rate)
         unit_landed = cost(alloc[line.pk] / line.quantity)
-        receive_stock(pol.product, shipment.warehouse, line.quantity, unit_goods + unit_landed, date,
+        receive_stock(pol.product, pol.warehouse, line.quantity, unit_goods + unit_landed, date,
                       receipt.number)
-        GoodsReceiptLine.objects.create(receipt=receipt, po_line=pol, product=pol.product,
+        GoodsReceiptLine.objects.create(receipt=receipt, po_line=pol, product=pol.product, warehouse=pol.warehouse,
                                         quantity=line.quantity, unit_goods_cost=unit_goods,
                                         unit_landed_cost=unit_landed)
         goods_total += money(line.quantity * pol.unit_price * pol.order.exchange_rate)
@@ -227,16 +228,19 @@ def receive_shipment(shipment, date, user=None):
 
 
 @transaction.atomic
-def receive_po(po, quantities, date, warehouse=None, user=None):
-    """Direct receipt against a PO (domestic purchases / no shipment tracking). quantities: {line_id: qty}."""
+def receive_po(po, quantities, date, user=None):
+    """Direct receipt against a PO (domestic / no shipment tracking). quantities: {line_id: qty}.
+
+    Each line is received into its own warehouse.
+    """
     from accounting.services import acct, post_journal
     from inventory.services import receive_stock
 
     po = PurchaseOrder.objects.select_for_update().get(pk=po.pk)
     if po.status not in PurchaseOrder.OPEN_STATUSES:
         raise ValidationError("PO must be sent/confirmed to receive goods.")
-    warehouse = warehouse or po.warehouse
     receipt = None
+    whs = {line.warehouse_id for line in po.lines.all() if (quantities.get(line.pk) or ZERO) > 0}
     goods_total = ZERO
     for line in po.lines.select_related("product"):
         qty = quantities.get(line.pk) or ZERO
@@ -245,11 +249,12 @@ def receive_po(po, quantities, date, warehouse=None, user=None):
         if qty > line.qty_open:
             raise ValidationError(f"{line.product.sku}: receiving {qty} exceeds open qty {line.qty_open}.")
         if receipt is None:
-            receipt = GoodsReceipt.objects.create(purchase_order=po, warehouse=warehouse, date=date, created_by=user)
+            receipt = GoodsReceipt.objects.create(purchase_order=po, warehouse_id=next(iter(whs)) if len(whs) == 1
+                                                  else None, date=date, created_by=user)
         unit = cost(line.unit_price * po.exchange_rate)
-        receive_stock(line.product, warehouse, qty, unit, date, receipt.number)
-        GoodsReceiptLine.objects.create(receipt=receipt, po_line=line, product=line.product, quantity=qty,
-                                        unit_goods_cost=unit)
+        receive_stock(line.product, line.warehouse, qty, unit, date, receipt.number)
+        GoodsReceiptLine.objects.create(receipt=receipt, po_line=line, product=line.product, warehouse=line.warehouse,
+                                        quantity=qty, unit_goods_cost=unit)
         goods_total += money(qty * line.unit_price * po.exchange_rate)
         line.qty_received += qty
         line.save(update_fields=["qty_received"])

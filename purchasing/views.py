@@ -114,7 +114,7 @@ class PODetail(ErpDetailView):
         ctx = super().get_context_data(**kwargs)
         po = self.object
         ctx.update(
-            lines=po.lines.select_related("product"),
+            lines=po.lines.select_related("product", "warehouse"),
             receipts=po.receipts.all(),
             bills=po.bills.prefetch_related("lines"),
             shipments=Shipment.objects.filter(lines__po_line__order=po).distinct(),
@@ -158,7 +158,7 @@ po_create_bill = _po_action(
 @internal_required
 def po_receive(request, pk):
     po = get_object_or_404(PurchaseOrder, pk=pk)
-    lines = po.lines.select_related("product")
+    lines = po.lines.select_related("product", "warehouse")
     if request.method == "POST":
         quantities = {line.pk: d(request.POST.get(f"qty_{line.pk}")) for line in lines}
         date = request.POST.get("date") or datetime.date.today()
@@ -224,7 +224,7 @@ class ShipmentDetail(ErpDetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         s = self.object
-        lines = list(s.lines.select_related("po_line__product", "po_line__order"))
+        lines = list(s.lines.select_related("po_line__product", "po_line__order", "po_line__warehouse"))
         uncapitalized = sum((lc.amount for lc in s.landed_costs.filter(capitalized=False)), d(0))
         preview = services.allocate(s, uncapitalized, lines) if s.status != Shipment.RECEIVED else {}
         rows = []
