@@ -93,6 +93,8 @@ class Company(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     logo = models.BinaryField(null=True, blank=True, editable=False)
     logo_mime = models.CharField(max_length=50, blank=True, editable=False)
+    lock_date = models.DateField("Books closed through", null=True, blank=True, editable=False,
+                                 help_text="Nothing can be posted on or before this date (month-end close)")
     legal_name = models.CharField(max_length=200, blank=True)
     tax_id = models.CharField(max_length=50, blank=True)
     address = models.TextField(blank=True)

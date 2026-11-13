@@ -28,6 +28,8 @@ NAV = [
         ("Vendor Payments", "accounting:vendorpayment_list", "accounting/vendor-payments"),
         ("Vendor Credits", "returns:vendorcredit_list", "returns/vendor-credits"),
         ("Journal Entries", "accounting:journalentry_list", "accounting/journal"),
+        ("Bank Reconciliation", "accounting:bankreconciliation_list", "accounting/bank-reconciliation"),
+        ("Month-End Close", "accounting:period_close", "accounting/month-end-close"),
         ("Chart of Accounts", "accounting:account_list", "accounting/accounts"),
         ("Financial Reports", "accounting:reports", "accounting/reports"),
     ]),

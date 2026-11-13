@@ -1,0 +1,36 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><div><h1>Month-end close</h1>
+  <div class="sub">{% if locked %}Books are <strong>closed through {{ locked|date:"F j, Y" }}</strong>. Nothing can be posted on or before that date.{% else %}No periods are closed yet.{% endif %}</div></div></div>
+<div class="grid-2">
+<div class="card">
+  <h3>Close {{ period_end|date:"F Y" }}</h3>
+  <form method="get" class="inline-form" style="margin-bottom:12px"><label class="field"><span>Month</span><select name="period" onchange="this.form.submit()">
+    {% for m in months %}<option value="{{ m.end|date:'Y-m-d' }}" {% if m.end == period_end %}selected{% endif %}>{{ m.end|date:"F Y" }}{% if m.closed %} — closed{% endif %}</option>{% endfor %}</select></label></form>
+  <table class="table compact"><tbody>
+  {% for i in items %}<tr>
+    <td style="width:28px">{% if i.ok %}<span class="badge badge-posted">✓</span>{% elif i.severity == 'error' %}<span class="badge badge-void">✕</span>{% elif i.severity == 'info' %}<span class="badge">i</span>{% else %}<span class="badge badge-draft">!</span>{% endif %}</td>
+    <td>{% if i.url %}<a href="{{ i.url }}">{{ i.title }}</a>{% else %}{{ i.title }}{% endif %}</td><td class="muted">{{ i.detail }}</td></tr>{% endfor %}
+  </tbody></table>
+  {% if "accounting.close" in perms %}
+    {% if can_close %}
+    <form method="post" action="{% url 'accounting:period_close_action' %}" style="margin-top:12px" onsubmit="return confirm('Close the books through {{ period_end|date:'Y-m-d' }}? Nothing can be posted on or before that date until it is reopened.')">{% csrf_token %}
+      <input type="hidden" name="period" value="{{ period_end|date:'Y-m-d' }}">
+      <label class="field"><span>Notes</span><input name="notes" placeholder="e.g. Reviewed with CPA"></label>
+      {% if open_count %}<label style="display:block;margin:8px 0"><input type="checkbox" name="force" value="1"> Close anyway ({{ open_count }} item{{ open_count|pluralize }} still open)</label>{% endif %}
+      <button class="btn btn-primary" {% if has_error %}disabled{% endif %}>Close books through {{ period_end|date:"Y-m-d" }}</button></form>
+    {% elif locked and period_end <= locked %}<p class="muted">This month is closed.</p>{% else %}<p class="muted">The month hasn't ended yet.</p>{% endif %}
+  {% endif %}
+</div>
+<div class="card">
+  <h3>Reopen</h3>
+  {% if locked and "accounting.close" in perms %}
+    <p class="muted">Reopens {{ locked|date:"F Y" }} so corrections can be posted. Every reopen is logged.</p>
+    <form method="post" action="{% url 'accounting:period_reopen' %}" class="inline-form" onsubmit="return confirm('Reopen {{ locked|date:'F Y' }}?')">{% csrf_token %}
+      <label class="field"><span>Reason</span><input name="notes" required placeholder="e.g. Late vendor bill"></label><button class="btn btn-danger">Reopen {{ locked|date:"M Y" }}</button></form>
+  {% elif locked %}<p class="muted">Only users with the close-periods permission can reopen.</p>{% else %}<p class="muted">Nothing to reopen.</p>{% endif %}
+  <h3 style="margin-top:16px">Log</h3>
+  <table class="table compact"><tbody>{% for e in log %}<tr><td>{{ e.at|date:"Y-m-d H:i" }}</td><td>{{ e.get_action_display }} {{ e.period_end|date:"M Y" }}</td><td>{% if e.user %}{{ e.user }}{% endif %}</td><td class="muted">{{ e.notes }}{% if e.warnings %} <span title="{{ e.warnings|join:'; ' }}">({{ e.warnings|length }} open item{{ e.warnings|length|pluralize }})</span>{% endif %}</td></tr>{% empty %}<tr><td class="empty">No closes yet.</td></tr>{% endfor %}</tbody></table>
+</div>
+</div>
+{% endblock %}

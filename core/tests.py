@@ -58,7 +58,8 @@ class SmokeTests(TestCase):
         for route, p in walk(get_resolver().url_patterns):
             if route.startswith(("admin", "portal/", "login", "logout", "media")):
                 continue
-            if route.endswith(("import/",)):
+            if route.endswith(("import/", "bank-reconciliation/start/", "month-end-close/close/",
+                               "month-end-close/reopen/")):
                 continue  # POST-only
             if "<" not in route:
                 urls = ["/" + route]

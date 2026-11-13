@@ -14,7 +14,7 @@ TRACKED = {
     "sales.SalesOrder": None, "sales.SalesOrderLine": "order",
     "purchasing.Vendor": None, "purchasing.PurchaseOrder": None, "purchasing.PurchaseOrderLine": "order",
     "purchasing.Shipment": None, "purchasing.ShipmentLine": "shipment", "purchasing.LandedCost": "shipment",
-    "accounting.Account": None, "accounting.CustomerInvoice": None, "accounting.CustomerInvoiceLine": "invoice",
+    "accounting.Account": None, "accounting.BankReconciliation": None, "accounting.CustomerInvoice": None, "accounting.CustomerInvoiceLine": "invoice",
     "accounting.CustomerPayment": None, "accounting.CustomerPaymentAllocation": "payment",
     "accounting.VendorBill": None, "accounting.VendorBillLine": "bill",
     "accounting.VendorPayment": None, "accounting.VendorPaymentAllocation": "payment",

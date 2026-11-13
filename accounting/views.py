@@ -1,4 +1,5 @@
 import datetime
+from decimal import Decimal
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
@@ -9,6 +10,7 @@ from django.views.decorators.http import require_POST
 from core.crud import ErpCreateView, ErpDetailView, ErpListView, ErpUpdateView, run_action
 from core.mixins import internal_required
 from core.models import Company, ExchangeRate
+from core.utils import ZERO
 
 from . import services
 from .forms import (
@@ -389,3 +391,176 @@ def ap_aging(request):
 
 
 __all__ = ["ValidationError"]
+
+
+# ----------------------------------------------------------------------------- bank reconciliation
+
+from . import banking, periods  # noqa: E402
+from .models import BankReconciliation, PeriodClose  # noqa: E402
+
+
+@internal_required
+def bank_reconciliations(request):
+    banks = []
+    for acc in Account.objects.filter(is_bank=True, is_active=True).order_by("code"):
+        last = banking.last_completed(acc)
+        banks.append({
+            "account": acc, "book_balance": acc.balance(), "last": last,
+            "in_progress": BankReconciliation.objects.filter(account=acc,
+                                                             status=BankReconciliation.IN_PROGRESS).first(),
+            "uncleared": acc.lines.filter(reconciliation__isnull=True).count(),
+        })
+    history = BankReconciliation.objects.select_related("account", "completed_by")[:50]
+    return render(request, "accounting/bankrec_list.html", {"banks": banks, "history": history,
+                                                             "today": datetime.date.today()})
+
+
+@internal_required
+@require_POST
+def bankrec_start(request):
+    acc = get_object_or_404(Account, pk=request.POST.get("account"), is_bank=True)
+    try:
+        bal = Decimal(request.POST.get("statement_balance", "").replace(",", ""))
+    except Exception:
+        messages.error(request, "Enter the statement ending balance.")
+        return redirect("accounting:bankreconciliation_list")
+    rec = run_action(request, acc, banking.start_reconciliation, f"Reconciliation started for {acc}.", acc,
+                     _date(request.POST.get("statement_date"), datetime.date.today()), bal, request.user)
+    return redirect(rec.get_absolute_url() if rec else "accounting:bankreconciliation_list")
+
+
+@internal_required
+def bankrec_detail(request, pk):
+    rec = get_object_or_404(BankReconciliation.objects.select_related("account"), pk=pk)
+    ctx = {"object": rec, "editable": rec.status == BankReconciliation.IN_PROGRESS}
+    if ctx["editable"]:
+        lines = list(banking.candidate_lines(rec))
+        ctx["deposits"] = [ln for ln in lines if ln.debit]
+        ctx["payments"] = [ln for ln in lines if ln.credit]
+        ctx["offset_accounts"] = Account.objects.filter(is_active=True, is_bank=False,
+                                                        account_type__in=[Account.EXPENSE, Account.INCOME])
+    else:
+        ctx["cleared"] = rec.cleared_lines.select_related("entry", "customer", "vendor") \
+            .order_by("entry__date", "id")
+    out = list(banking.outstanding(rec)) if not ctx["editable"] else []
+    ctx["out_deposits"] = [ln for ln in out if ln.debit]
+    ctx["out_payments"] = [ln for ln in out if ln.credit]
+    ctx["out_dep_total"] = sum((ln.debit for ln in ctx["out_deposits"]), ZERO)
+    ctx["out_pay_total"] = sum((ln.credit for ln in ctx["out_payments"]), ZERO)
+    ctx["book_balance"] = rec.account.balance(end=rec.statement_date)
+    ctx["proof"] = rec.statement_balance + ctx["out_dep_total"] - ctx["out_pay_total"]
+    dr, cr = rec.cleared_totals
+    ctx.update(cleared_dr=dr, cleared_cr=cr)
+    return render(request, "accounting/bankrec_detail.html", ctx)
+
+
+@internal_required
+@require_POST
+def bankrec_save(request, pk):
+    rec = get_object_or_404(BankReconciliation, pk=pk)
+    ok = run_action(request, rec, banking.set_cleared, "Saved.", rec, request.POST.getlist("cleared"))
+    if ok and request.POST.get("finish"):
+        run_action(request, rec, banking.complete_reconciliation, f"{rec.number} completed.", rec, request.user)
+    return redirect(rec.get_absolute_url())
+
+
+@internal_required
+@require_POST
+def bankrec_import(request, pk):
+    rec = get_object_or_404(BankReconciliation, pk=pk)
+    f = request.FILES.get("statement")
+    if not f:
+        messages.error(request, "Choose a CSV file exported from your bank.")
+        return redirect(rec.get_absolute_url())
+    try:
+        matched, unmatched = banking.import_statement(rec, f.read())
+        messages.success(request, f"Matched and cleared {matched} item{'s' if matched != 1 else ''}; "
+                                  f"{len(unmatched)} statement line{'s' if len(unmatched) != 1 else ''} not found "
+                                  "in the books.")
+    except ValidationError as exc:
+        for m in exc.messages:
+            messages.error(request, m)
+    return redirect(rec.get_absolute_url())
+
+
+@internal_required
+@require_POST
+def bankrec_item(request, pk):
+    rec = get_object_or_404(BankReconciliation, pk=pk)
+    acc = Account.objects.filter(pk=request.POST.get("account")).first()
+    try:
+        amount = Decimal(request.POST.get("amount", "").replace(",", ""))
+    except Exception:
+        amount = None
+    if not acc or amount is None:
+        messages.error(request, "Pick an account and enter an amount.")
+        return redirect(rec.get_absolute_url())
+    if request.POST.get("direction") == "out":
+        amount = -abs(amount)
+    else:
+        amount = abs(amount)
+    run_action(request, rec, banking.record_bank_item, "Bank item recorded and cleared.", rec, acc, amount,
+               request.POST.get("memo", "").strip(), request.user)
+    return redirect(rec.get_absolute_url())
+
+
+@internal_required
+@require_POST
+def bankrec_undo(request, pk):
+    rec = get_object_or_404(BankReconciliation, pk=pk)
+    run_action(request, rec, banking.undo_reconciliation, f"{rec.number} reopened.", rec, request.user)
+    return redirect(rec.get_absolute_url())
+
+
+@internal_required
+@require_POST
+def bankrec_delete(request, pk):
+    rec = get_object_or_404(BankReconciliation, pk=pk)
+    if run_action(request, rec, lambda: banking.delete_reconciliation(rec) or True, f"{rec.number} deleted."):
+        return redirect("accounting:bankreconciliation_list")
+    return redirect(rec.get_absolute_url())
+
+
+# ----------------------------------------------------------------------------- month-end close
+
+@internal_required
+def period_close(request):
+    today = datetime.date.today()
+    locked = periods.lock_date()
+    default_end = periods.month_end(locked + datetime.timedelta(days=1)) if locked else periods.prev_month_end(today)
+    if default_end >= today:
+        default_end = periods.prev_month_end(today)
+    period_end = periods.month_end(_date(request.GET.get("period"), default_end))
+    months = []
+    d = periods.prev_month_end(today)
+    for _ in range(12):
+        months.append({"end": d, "closed": bool(locked and d <= locked)})
+        d = periods.prev_month_end(d)
+    items = periods.checklist(period_end)
+    return render(request, "accounting/period_close.html", {
+        "locked": locked, "period_end": period_end, "months": months, "items": items,
+        "open_count": sum(1 for i in items if i["severity"] == "warn"),
+        "has_error": any(i["severity"] == "error" for i in items),
+        "can_close": not (locked and period_end <= locked) and period_end < today,
+        "log": PeriodClose.objects.select_related("user")[:20],
+    })
+
+
+@internal_required
+@require_POST
+def period_close_action(request):
+    end = _date(request.POST.get("period"), None)
+    if not end:
+        messages.error(request, "Pick a month.")
+        return redirect("accounting:period_close")
+    run_action(request, None, periods.close_period, f"Books closed through {periods.month_end(end):%Y-%m-%d}.", end,
+               request.user, request.POST.get("notes", ""), bool(request.POST.get("force")))
+    return redirect("accounting:period_close")
+
+
+@internal_required
+@require_POST
+def period_reopen(request):
+    run_action(request, None, periods.reopen_period, "Period reopened.", request.user,
+               request.POST.get("notes", ""))
+    return redirect("accounting:period_close")

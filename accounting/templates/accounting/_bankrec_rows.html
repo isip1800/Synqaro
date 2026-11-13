@@ -1,0 +1,7 @@
+{% load erp %}{% for ln in rows %}<tr>
+  <td><input type="checkbox" class="clr" name="cleared" value="{{ ln.pk }}" data-amt="{% if side == 'dep' %}{{ ln.debit }}{% else %}-{{ ln.credit }}{% endif %}" {% if ln.reconciliation_id %}checked{% endif %} form="recform"></td>
+  <td>{{ ln.entry.date|date:"Y-m-d" }}</td>
+  <td><a href="{{ ln.entry.get_absolute_url }}">{{ ln.entry.reference|default:ln.entry.number }}</a></td>
+  <td>{{ ln.customer|default:"" }}{{ ln.vendor|default:"" }} <span class="muted">{{ ln.description|default:ln.entry.memo|truncatechars:50 }}</span></td>
+  <td class="num">{% if side == 'dep' %}{{ ln.debit|money }}{% else %}{{ ln.credit|money }}{% endif %}</td>
+</tr>{% empty %}<tr><td colspan="5" class="empty">None.</td></tr>{% endfor %}
