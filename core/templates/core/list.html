@@ -4,6 +4,7 @@
   <h1>{{ title }}</h1>
   <div class="actions">{% include "core/_chooser.html" %}{% block list_actions %}{% if create_url %}<a class="btn btn-primary" href="{{ create_url }}">+ New</a>{% endif %}{% endblock %}</div>
 </div>
+{% block list_top %}{% endblock %}
 {% if search_enabled or filters %}
 <form class="toolbar" method="get">
   {% if search_enabled %}<input type="search" name="q" value="{{ q }}" placeholder="Search…">{% endif %}

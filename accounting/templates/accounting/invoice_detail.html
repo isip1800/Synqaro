@@ -10,6 +10,12 @@
     {% elif object.status in 'posted,partial' %}
       <a class="btn btn-primary" href="{% url 'accounting:customerpayment_create' %}?customer={{ object.customer.pk }}&amount={{ object.balance_due }}">Record payment</a>
     {% endif %}
+    {% if object.status != 'draft' and object.status != 'void' and "returns.edit" in perms %}
+      <a class="btn" href="{% url 'returns:chargeback_create' %}?invoice={{ object.pk }}&customer={{ object.customer.pk }}">Record chargeback</a>
+    {% endif %}
+    {% if object.status != 'draft' and object.status != 'void' and "accounting.post" in perms %}
+      <a class="btn" href="{% url 'returns:creditmemo_create' %}?customer={{ object.customer.pk }}&invoice={{ object.pk }}&tax_rate={{ object.tax_rate }}">Credit memo</a>
+    {% endif %}
     {% if object.status != 'draft' %}<a class="btn" href="{% url 'core:email_compose' 'invoice' object.pk %}">✉ Email</a>{% endif %}
     <a class="btn" href="{% url 'core:print_document' 'invoice' object.pk %}" target="_blank">Print / PDF</a>
   </div>
@@ -32,6 +38,10 @@
   {% if object.status != 'draft' %}<div class="muted no-print"><span>Gross margin</span><span>{{ object.gross_margin|money }}</span></div>{% endif %}
 </div></div>
 {% if object.allocations.exists %}<div class="card table-wrap no-print"><h3>Payments applied</h3><table class="table compact"><tbody>{% for a in object.allocations.all %}<tr><td><a href="{{ a.payment.get_absolute_url }}">{{ a.payment.number }}</a></td><td>{{ a.payment.date|date:"Y-m-d" }}</td><td class="num">{{ a.amount|money }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% with cms=object.credit_allocations.all cbs=object.chargebacks.all %}{% if cms or cbs %}<div class="card table-wrap no-print"><h3>Credits &amp; deductions</h3><table class="table compact"><tbody>
+{% for a in cms %}<tr><td><a href="{{ a.credit_memo.get_absolute_url }}">{{ a.credit_memo.number }}</a></td><td>Credit memo applied {{ a.date|date:"Y-m-d" }}</td><td class="num">{{ a.amount|money }}</td></tr>{% endfor %}
+{% for c in cbs %}<tr><td><a href="{{ c.get_absolute_url }}">{{ c.number }}</a></td><td>Chargeback · {{ c.get_chargeback_type_display }} {% status_badge c %}</td><td class="num">{{ c.amount|money }}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}{% endwith %}
 {% if object.notes %}<div class="card"><h3>Notes</h3>{{ object.notes|linebreaksbr }}</div>{% endif %}
 {% notes_and_files object %}
 {% endblock %}

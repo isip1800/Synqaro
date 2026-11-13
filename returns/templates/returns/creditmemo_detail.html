@@ -1,0 +1,36 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Credit memo {{ object.number }} {% status_badge object %}</h1>
+    <div class="sub"><a href="{{ object.customer.get_absolute_url }}">{{ object.customer }}</a> · {{ object.date|date:"Y-m-d" }} · {{ object.get_reason_display }}{% if object.customer_return %} · <a href="{{ object.customer_return.get_absolute_url }}">{{ object.customer_return.number }}</a>{% endif %}{% if object.invoice %} · for <a href="{{ object.invoice.get_absolute_url }}">{{ object.invoice.number }}</a>{% endif %}{% include "returns/_journal.html" %}</div></div>
+  <div class="actions">
+    {% if "accounting.post" in perms and object.status == 'draft' %}
+      <a class="btn" href="{% url 'returns:creditmemo_update' object.pk %}">Edit</a>
+      <form method="post" action="{% url 'returns:creditmemo_post' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Post credit memo</button></form>
+      <form method="post" action="{% url 'returns:creditmemo_void' object.pk %}" onsubmit="return confirm('Void this draft?')">{% csrf_token %}<button class="btn btn-danger">Void</button></form>
+    {% endif %}
+  </div>
+</div>
+<div class="card table-wrap"><table class="table"><thead><tr><th>Description</th><th>Account</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr></thead><tbody>
+{% for l in object.lines.all %}<tr><td>{{ l.description }}</td><td>{% if l.account %}{{ l.account.code }} {{ l.account.name }}{% else %}<span class="muted">Sales returns &amp; allowances</span>{% endif %}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|money }}</td><td class="num">{{ l.amount|money }}</td></tr>{% empty %}<tr><td colspan="5" class="empty">No lines.</td></tr>{% endfor %}
+</tbody></table>
+<div class="totals" style="padding:12px 16px">
+  <div><span>Subtotal</span><span>{{ object.subtotal|money }}</span></div>
+  <div><span>Tax ({{ object.tax_rate|pct }})</span><span>{{ object.tax|money }}</span></div>
+  <div class="grand"><span>Total credit</span><span>{{ object.total|money }}</span></div>
+  <div><span>Applied</span><span>{{ object.amount_applied|money }}</span></div>
+  <div class="grand"><span>Unapplied</span><span>{{ object.unapplied|money }}</span></div>
+</div></div>
+{% if apply_form and "accounting.post" in perms %}<div class="card"><h3>Apply to invoices</h3>
+  {% if apply_form.fields.target.queryset.exists %}
+  <form method="post" action="{% url 'returns:creditmemo_apply' object.pk %}" class="inline-form">{% csrf_token %}
+    <label class="field"><span>Invoice</span>{{ apply_form.target }}</label>
+    <label class="field"><span>Amount</span><input type="number" step="0.01" name="amount" value="{{ object.unapplied }}"></label>
+    <button class="btn">Apply</button></form>
+  <form method="post" action="{% url 'returns:creditmemo_apply' object.pk %}" style="margin-top:8px">{% csrf_token %}<input type="hidden" name="auto" value="1"><button class="btn btn-primary">Auto-apply (original invoice first, then oldest)</button></form>
+  {% else %}<p class="muted">This customer has no open invoices. The credit stays on account until the next invoice.</p>{% endif %}
+</div>{% endif %}
+{% with allocs=object.allocations.all %}{% if allocs %}<div class="card table-wrap"><h3>Applied to</h3><table class="table compact"><tbody>{% for a in allocs %}<tr><td><a href="{{ a.invoice.get_absolute_url }}">{{ a.invoice.number }}</a></td><td>{{ a.date|date:"Y-m-d" }}</td><td class="num">{{ a.amount|money }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}{% endwith %}
+{% if object.notes %}<div class="card"><h3>Notes</h3>{{ object.notes|linebreaksbr }}</div>{% endif %}
+{% notes_and_files object %}
+{% endblock %}

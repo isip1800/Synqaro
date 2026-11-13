@@ -300,7 +300,33 @@ class Command(BaseCommand):
         full_cycle(order(cust[1], 22, [(P[1], 60), (P[0], 150)], po="KD-9921"), 21, 21, 3, D("4000"))
         full_cycle(order(cust[2], 50, [(P[5], 90), (P[3], 20)]), 49, 49)  # overdue
         full_cycle(order(cust[3], 15, [(P[5], 60), (P[2], 100)]), 14, 14, 2)
-        full_cycle(order(cust[0], 6, [(P[4], 80), (P[3], 30)], po="HS-4502"), 5, 5)
+        hs_so = order(cust[0], 6, [(P[4], 80), (P[3], 30)], po="HS-4502")
+        hs_inv = full_cycle(hs_so, 5, 5)
+
+        # Returns & deductions
+        from returns import services as rts
+        from returns.models import Chargeback, CustomerReturn, CustomerReturnLine
+
+        rma = CustomerReturn.objects.create(customer=cust[0], sales_order=hs_so, invoice=hs_inv, warehouse=main,
+                                            date=ago(2), reason="damaged", customer_reference="RA-55102",
+                                            created_by=admin)
+        CustomerReturnLine.objects.create(customer_return=rma, product=P[4], quantity=D(4),
+                                          unit_price=hs_so.lines.get(product=P[4]).unit_price)
+        CustomerReturnLine.objects.create(customer_return=rma, product=P[3], quantity=D(1),
+                                          unit_price=hs_so.lines.get(product=P[3]).unit_price,
+                                          disposition=CustomerReturnLine.SCRAP)
+        rts.receive_customer_return(rma, admin)
+        memo = rts.create_credit_memo_from_return(rma)
+        memo.date = ago(1)
+        memo.save()
+        rts.post_credit_memo(memo, admin)
+        rts.auto_apply_credit_memo(memo)
+        Chargeback.objects.create(customer=cust[0], invoice=hs_inv, sales_order=hs_so, date=ago(1),
+                                  deduction_reference="DED-88213", chargeback_type="labeling", amount=D("150"),
+                                  dispute_deadline=ago(-29), description="Missing UCC-128 carton labels")
+        cb = Chargeback.objects.create(customer=cust[1], date=ago(3), deduction_reference="DED-31977",
+                                       chargeback_type="late", amount=D("75"), description="Shipped after window")
+        rts.accept_chargeback(cb, user=admin)
         partial = order(cust[1], 4, [(P[0], 300), (P[1], 40)], po="KD-9960")
         sal.confirm_order(partial)
         sal.create_delivery(partial, {partial.lines.first().pk: D(200)}, ago(3), "FedEx Freight", "7712", admin)

@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Customer return {{ object.number }} {% status_badge object %}</h1>
+    <div class="sub"><a href="{{ object.customer.get_absolute_url }}">{{ object.customer }}</a> · {{ object.date|date:"Y-m-d" }} · {{ object.get_reason_display }} · into {{ object.warehouse.code }}{% if object.sales_order %} · <a href="{{ object.sales_order.get_absolute_url }}">{{ object.sales_order.number }}</a>{% endif %}{% if object.invoice %} · <a href="{{ object.invoice.get_absolute_url }}">{{ object.invoice.number }}</a>{% endif %}{% include "returns/_journal.html" %}</div></div>
+  <div class="actions">
+    {% if "returns.edit" in perms %}
+      {% if object.status == 'draft' %}
+        <a class="btn" href="{% url 'returns:customerreturn_update' object.pk %}">Edit</a>
+        <form method="post" action="{% url 'returns:customerreturn_receive' object.pk %}" onsubmit="return confirm('Receive these goods? Restock lines go back into inventory.')">{% csrf_token %}<button class="btn btn-primary">Receive goods</button></form>
+        <form method="post" action="{% url 'returns:customerreturn_cancel' object.pk %}" onsubmit="return confirm('Cancel this return?')">{% csrf_token %}<button class="btn btn-danger">Cancel</button></form>
+      {% endif %}
+      {% if object.status == 'received' and not object.credit_memos.exists %}<form method="post" action="{% url 'returns:customerreturn_credit' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Create credit memo</button></form>{% endif %}
+    {% endif %}
+  </div>
+</div>
+<div class="card table-wrap"><table class="table">
+<thead><tr><th>Product</th><th>Disposition</th><th class="num">Qty</th><th class="num">Credit price</th><th class="num">Amount</th>{% if can_see_costs and object.status != 'draft' %}<th class="num">Unit cost</th>{% endif %}</tr></thead><tbody>
+{% for l in object.lines.all %}<tr><td><a href="{{ l.product.get_absolute_url }}">{{ l.product.sku }}</a> {{ l.product.name }}</td><td>{{ l.get_disposition_display }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|money }}</td><td class="num">{{ l.amount|money }}</td>{% if can_see_costs and object.status != 'draft' %}<td class="num">{{ l.unit_cost|unitcost }}</td>{% endif %}</tr>{% empty %}<tr><td colspan="6" class="empty">No lines.</td></tr>{% endfor %}
+</tbody><tfoot><tr><td colspan="4">Total credit value</td><td class="num">{{ object.total|money }}</td></tr></tfoot></table></div>
+{% with memos=object.credit_memos.all %}{% if memos %}<div class="card table-wrap"><h3>Credit memos</h3><table class="table compact"><tbody>{% for m in memos %}<tr><td><a href="{{ m.get_absolute_url }}">{{ m.number }}</a></td><td>{% status_badge m %}</td><td class="num">{{ m.total|money }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}{% endwith %}
+<div class="card"><dl class="dl-grid"><div><dt>Customer RA</dt><dd>{{ object.customer_reference|default:"—" }}</dd></div><div><dt>Created by</dt><dd>{% if object.created_by %}{{ object.created_by }}{% else %}—{% endif %}</dd></div></dl>{% if object.notes %}<p>{{ object.notes|linebreaksbr }}</p>{% endif %}</div>
+{% notes_and_files object %}
+{% endblock %}

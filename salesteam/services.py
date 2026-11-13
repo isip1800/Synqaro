@@ -16,8 +16,8 @@ def accrue_commission(invoice, fraction, date, user=None):
     basis_total = invoice.gross_margin if rep.commission_basis == SalesRep.MARGIN else invoice.subtotal
     basis = money(basis_total * fraction)
     amount = money(basis * rep.commission_rate / 100)
-    if amount <= 0:
-        return None
+    if amount == 0 or (amount < 0 and fraction >= 0):
+        return None  # negative only for clawbacks (negative fraction)
     entry = post_journal(
         date, f"Commission {rep} on {invoice.number}",
         [{"account": acct("COMMISSION_EXP"), "debit": amount},

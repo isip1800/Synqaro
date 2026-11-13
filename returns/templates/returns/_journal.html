@@ -1,0 +1,1 @@
+{% if object.journal_entry and "accounting.view" in perms %} · <a href="{{ object.journal_entry.get_absolute_url }}">{{ object.journal_entry.number }}</a>{% endif %}
