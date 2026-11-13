@@ -12,7 +12,7 @@ from django.views.decorators.http import require_POST
 from core.crud import ErpCreateView, ErpDetailView, ErpListView, ErpUpdateView, run_action
 from core.mixins import internal_required
 from core.models import Company, ExchangeRate, default_warehouse
-from core.utils import d
+from core.utils import ZERO, d
 
 from . import services
 from .forms import (
@@ -47,16 +47,52 @@ class VendorDetail(ErpDetailView):
     def get_context_data(self, **kwargs):
         from accounting.models import VendorBill
 
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import Q
+
+        from core.models import Attachment, Note
+        from returns.models import VendorCredit
+
         ctx = super().get_context_data(**kwargs)
         v = self.object
+        today = datetime.date.today()
+        perms = getattr(self.request, "perms", ())
+        open_pos = list(v.purchase_orders.filter(status__in=PurchaseOrder.OPEN_STATUSES).prefetch_related("lines")
+                        .order_by("-order_date", "-id"))
+        shipments = Shipment.objects.filter(Q(vendor=v) | Q(forwarder=v)).order_by("-id")
+        ct = ContentType.objects.get_for_model(Vendor)
         ctx.update(
-            orders=v.purchase_orders.all()[:20],
-            bills=v.bills.prefetch_related("lines")[:20],
-            open_bills=v.bills.filter(status__in=VendorBill.OPEN_STATUSES).prefetch_related("lines"),
-            shipments=v.shipments.all()[:10],
-            vendor_products=v.vendor_products.select_related("product", "currency"),
-            contacts=v.portal_contacts.select_related("user"),
+            today=today,
+            orders=v.purchase_orders.prefetch_related("lines").select_related("currency")
+            .order_by("-order_date", "-id")[:50],
+            order_count=v.purchase_orders.count(),
+            open_pos=open_pos[:8],
+            open_po_count=len(open_pos),
+            open_po_value=sum((po.total for po in open_pos), ZERO),
+            shipments=shipments[:50],
+            shipment_count=shipments.count(),
+            in_transit=shipments.filter(status__in=Shipment.IN_TRANSIT_STATUSES).count(),
+            contacts=list(v.portal_contacts.select_related("user")),
+            note_count=Note.objects.filter(content_type=ct, object_id=v.pk).count()
+            + Attachment.objects.filter(content_type=ct, object_id=v.pk).count(),
+            returns=v.returns.prefetch_related("lines").order_by("-date", "-id")[:25],
         )
+        if "accounting.view" in perms:
+            open_bills = list(v.bills.filter(status__in=VendorBill.OPEN_STATUSES).prefetch_related("lines")
+                              .order_by("due_date"))
+            ctx.update(
+                open_bills=open_bills,
+                overdue_count=sum(1 for b in open_bills if b.due_date and b.due_date < today),
+                bills=v.bills.prefetch_related("lines").order_by("-bill_date", "-id")[:50],
+                bill_count=v.bills.count(),
+                payments=v.payments.order_by("-date", "-id")[:50],
+                payment_count=v.payments.count(),
+                credits=v.credits.prefetch_related("lines").order_by("-date", "-id")[:25],
+                open_credit_count=v.credits.filter(status__in=VendorCredit.OPEN_STATUSES).count(),
+            )
+        if "costs.view" in perms:
+            ctx["vendor_products"] = list(v.vendor_products.select_related("product", "currency"))
+        ctx["returns_count"] = len(ctx["returns"]) + len(ctx.get("credits", []))
         return ctx
 
 
