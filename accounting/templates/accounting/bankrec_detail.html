@@ -1,0 +1,86 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ object.number }} {% status_badge object %}</h1>
+    <div class="sub"><a href="{{ object.account.get_absolute_url }}">{{ object.account }}</a> · statement {{ object.statement_date|date:"Y-m-d" }}{% if object.completed_by %} · completed by {{ object.completed_by }} {{ object.completed_at|date:"Y-m-d H:i" }}{% endif %}</div></div>
+  <div class="actions">
+    <a class="btn" href="{% url 'accounting:bankreconciliation_list' %}">All accounts</a>
+    {% if "accounting.close" in perms %}
+      {% if editable %}<form method="post" action="{% url 'accounting:bankrec_delete' object.pk %}" onsubmit="return confirm('Delete this reconciliation? Cleared marks are removed.')">{% csrf_token %}<button class="btn btn-danger">Delete</button></form>
+      {% else %}<form method="post" action="{% url 'accounting:bankrec_undo' object.pk %}" onsubmit="return confirm('Reopen this reconciliation?')">{% csrf_token %}<button class="btn">Reopen</button></form>{% endif %}
+      <button class="btn" onclick="window.print()">Print</button>
+    {% endif %}
+  </div>
+</div>
+<div class="kpis">
+  <div class="kpi"><div class="label">Beginning balance</div><div class="value">{{ object.beginning_balance|money }}</div></div>
+  <div class="kpi"><div class="label">Cleared deposits</div><div class="value" id="k-dep">{{ cleared_dr|money }}</div></div>
+  <div class="kpi"><div class="label">Cleared payments</div><div class="value" id="k-pay">{{ cleared_cr|money }}</div></div>
+  <div class="kpi"><div class="label">Cleared balance</div><div class="value" id="k-cleared">{{ object.cleared_balance|money }}</div><div class="note">Statement {{ object.statement_balance|money }}</div></div>
+  <div class="kpi {% if object.difference %}bad{% endif %}" id="k-diff-box"><div class="label">Difference</div><div class="value" id="k-diff">{{ object.difference|money }}</div></div>
+</div>
+{% if editable %}
+{% if "accounting.close" in perms %}
+<div class="grid-2 no-print">
+  <div class="card"><h3>Import bank statement (CSV)</h3><p class="muted">Download transactions from your bank as CSV. Items with the same amount within 7 days are ticked automatically.</p>
+    <form method="post" enctype="multipart/form-data" action="{% url 'accounting:bankrec_import' object.pk %}" class="inline-form">{% csrf_token %}<input type="file" name="statement" accept=".csv,text/csv" required><button class="btn">Import &amp; match</button></form></div>
+  <div class="card"><h3>Bank fee / interest on the statement</h3>
+    <form method="post" action="{% url 'accounting:bankrec_item' object.pk %}" class="inline-form">{% csrf_token %}
+      <label class="field"><span>Type</span><select name="direction"><option value="out">Fee / charge (money out)</option><option value="in">Interest / credit (money in)</option></select></label>
+      <label class="field"><span>Account</span><select name="account" required>{% for a in offset_accounts %}<option value="{{ a.pk }}" {% if a.code == '6400' %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+      <label class="field"><span>Amount</span><input type="number" step="0.01" min="0.01" name="amount" required></label>
+      <label class="field"><span>Memo</span><input name="memo" placeholder="Wire fee"></label>
+      <button class="btn">Record &amp; clear</button></form></div>
+</div>
+{% endif %}
+{% if object.unmatched %}<div class="card table-wrap"><h3>Statement lines not found in the books</h3><p class="muted">Enter these (payment, deposit, bank fee…) and they'll appear below to tick.</p><table class="table compact"><tbody>
+{% for u in object.unmatched %}<tr><td>{{ u.date }}</td><td>{{ u.description }}</td><td class="num">{{ u.amount }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+<form method="post" id="recform" action="{% url 'accounting:bankrec_save' object.pk %}">{% csrf_token %}</form>
+<div class="grid-2">
+  <div class="card table-wrap"><h3>Deposits &amp; credits <label class="muted" style="font-weight:normal"><input type="checkbox" data-all="dep"> all</label></h3><table class="table compact" data-side="dep"><tbody>{% include "accounting/_bankrec_rows.html" with rows=deposits side="dep" %}</tbody></table></div>
+  <div class="card table-wrap"><h3>Payments &amp; debits <label class="muted" style="font-weight:normal"><input type="checkbox" data-all="pay"> all</label></h3><table class="table compact" data-side="pay"><tbody>{% include "accounting/_bankrec_rows.html" with rows=payments side="pay" %}</tbody></table></div>
+</div>
+{% if "accounting.close" in perms %}<div class="card no-print" style="display:flex;gap:8px;justify-content:flex-end">
+  <button class="btn" form="recform">Save progress</button>
+  <button class="btn btn-primary" form="recform" name="finish" value="1" id="finish">Finish reconciliation</button>
+</div>{% endif %}
+<script>
+(function(){
+  const begin = {{ object.beginning_balance }}, stmt = {{ object.statement_balance }};
+  const fmt = v => v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  function recalc(){
+    let dep=0, pay=0;
+    document.querySelectorAll('.clr:checked').forEach(c=>{const a=parseFloat(c.dataset.amt); if(a>0) dep+=a; else pay-=a;});
+    const cleared = Math.round((begin+dep-pay)*100)/100, diff = Math.round((stmt-cleared)*100)/100;
+    document.getElementById('k-dep').textContent=fmt(dep); document.getElementById('k-pay').textContent=fmt(pay);
+    document.getElementById('k-cleared').textContent=fmt(cleared); document.getElementById('k-diff').textContent=fmt(diff);
+    document.getElementById('k-diff-box').classList.toggle('bad', diff!==0);
+    const f=document.getElementById('finish'); if(f) f.disabled = diff!==0;
+  }
+  document.querySelectorAll('.clr').forEach(c=>c.addEventListener('change',recalc));
+  document.querySelectorAll('[data-all]').forEach(a=>a.addEventListener('change',()=>{
+    document.querySelectorAll(`table[data-side="${a.dataset.all}"] .clr`).forEach(c=>c.checked=a.checked); recalc();}));
+  recalc();
+})();
+</script>
+{% else %}
+<div class="card"><h3>Reconciliation proof at {{ object.statement_date|date:"Y-m-d" }}</h3>
+  <div class="totals" style="max-width:520px">
+    <div><span>Statement ending balance</span><span>{{ object.statement_balance|money }}</span></div>
+    <div><span>+ Deposits in transit</span><span>{{ out_dep_total|money }}</span></div>
+    <div><span>− Outstanding payments</span><span>{{ out_pay_total|money }}</span></div>
+    <div class="grand"><span>Adjusted bank balance</span><span>{{ proof|money }}</span></div>
+    <div class="grand"><span>Book balance</span><span>{{ book_balance|money }}</span></div>
+  </div>
+  {% if proof != book_balance %}<p class="muted">The difference comes from entries dated on or before the statement date that were posted after this reconciliation was completed.</p>{% endif %}
+</div>
+<div class="grid-2">
+  <div class="card table-wrap"><h3>Deposits in transit</h3><table class="table compact"><tbody>{% for ln in out_deposits %}<tr><td>{{ ln.entry.date|date:"Y-m-d" }}</td><td><a href="{{ ln.entry.get_absolute_url }}">{{ ln.entry.reference|default:ln.entry.number }}</a></td><td>{{ ln.customer|default:"" }}{{ ln.vendor|default:"" }}</td><td class="num">{{ ln.debit|money }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div>
+  <div class="card table-wrap"><h3>Outstanding payments</h3><table class="table compact"><tbody>{% for ln in out_payments %}<tr><td>{{ ln.entry.date|date:"Y-m-d" }}</td><td><a href="{{ ln.entry.get_absolute_url }}">{{ ln.entry.reference|default:ln.entry.number }}</a></td><td>{{ ln.customer|default:"" }}{{ ln.vendor|default:"" }}</td><td class="num">{{ ln.credit|money }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div>
+</div>
+<div class="card table-wrap"><h3>Cleared items ({{ cleared|length }})</h3><table class="table compact"><thead><tr><th>Date</th><th>Reference</th><th>Party / memo</th><th class="num">Deposit</th><th class="num">Payment</th></tr></thead><tbody>
+{% for ln in cleared %}<tr><td>{{ ln.entry.date|date:"Y-m-d" }}</td><td><a href="{{ ln.entry.get_absolute_url }}">{{ ln.entry.reference|default:ln.entry.number }}</a></td><td>{{ ln.customer|default:"" }}{{ ln.vendor|default:"" }} <span class="muted">{{ ln.description|default:ln.entry.memo|truncatechars:50 }}</span></td><td class="num">{% if ln.debit %}{{ ln.debit|money }}{% endif %}</td><td class="num">{% if ln.credit %}{{ ln.credit|money }}{% endif %}</td></tr>{% empty %}<tr><td colspan="5" class="empty">None.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+{% if object.notes %}<div class="card">{{ object.notes|linebreaksbr }}</div>{% endif %}
+{% endblock %}

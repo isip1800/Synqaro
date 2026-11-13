@@ -46,6 +46,18 @@ urlpatterns = [
     path("vendor-payments/<int:pk>/post/", action_view(VendorPayment, services.post_vendor_payment,
                                                        "Payment {obj} posted."), name="vendor_payment_post"),
     path("void/<str:kind>/<int:pk>/", views.void_draft, name="void_draft"),
+    # Bank reconciliation & month-end close
+    path("bank-reconciliation/", views.bank_reconciliations, name="bankreconciliation_list"),
+    path("bank-reconciliation/start/", views.bankrec_start, name="bankrec_start"),
+    path("bank-reconciliation/<int:pk>/", views.bankrec_detail, name="bankreconciliation_detail"),
+    path("bank-reconciliation/<int:pk>/save/", views.bankrec_save, name="bankrec_save"),
+    path("bank-reconciliation/<int:pk>/import/", views.bankrec_import, name="bankrec_import"),
+    path("bank-reconciliation/<int:pk>/item/", views.bankrec_item, name="bankrec_item"),
+    path("bank-reconciliation/<int:pk>/reopen/", views.bankrec_undo, name="bankrec_undo"),
+    path("bank-reconciliation/<int:pk>/delete/", views.bankrec_delete, name="bankrec_delete"),
+    path("month-end-close/", views.period_close, name="period_close"),
+    path("month-end-close/close/", views.period_close_action, name="period_close_action"),
+    path("month-end-close/reopen/", views.period_reopen, name="period_reopen"),
     # Reports
     path("reports/", views.reports, name="reports"),
     path("reports/trial-balance/", views.trial_balance, name="trial_balance"),

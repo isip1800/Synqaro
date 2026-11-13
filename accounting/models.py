@@ -76,6 +76,28 @@ class JournalEntry(NumberedMixin):
         ordering = ["-date", "-id"]
         verbose_name_plural = "journal entries"
 
+    def save(self, *args, **kwargs):
+        from .periods import check_period_open
+
+        if not self.pk:
+            check_period_open(self.date, self.company_id)
+        else:
+            old = JournalEntry.all_companies.filter(pk=self.pk).values_list("date", flat=True).first()
+            if old != self.date:
+                check_period_open(old, self.company_id)
+                check_period_open(self.date, self.company_id)
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        from .periods import check_period_open
+
+        check_period_open(self.date, self.company_id)
+        if self.lines.filter(reconciliation__status="completed").exists():
+            from django.core.exceptions import ValidationError
+
+            raise ValidationError("This entry has lines cleared in a completed bank reconciliation.")
+        return super().delete(*args, **kwargs)
+
     def get_absolute_url(self):
         return reverse("accounting:journalentry_detail", args=[self.pk])
 
@@ -94,6 +116,9 @@ class JournalLine(TenantModel):
                                  related_name="journal_lines")
     vendor = models.ForeignKey("purchasing.Vendor", null=True, blank=True, on_delete=models.PROTECT,
                                related_name="journal_lines")
+    reconciliation = models.ForeignKey("BankReconciliation", null=True, blank=True, on_delete=models.SET_NULL,
+                                       editable=False, related_name="cleared_lines",
+                                       help_text="Bank reconciliation this line was cleared in")
 
     class Meta:
         ordering = ["id"]
@@ -342,3 +367,68 @@ class VendorPaymentAllocation(TenantModel):
     payment = models.ForeignKey(VendorPayment, on_delete=models.CASCADE, related_name="allocations")
     bill = models.ForeignKey(VendorBill, on_delete=models.PROTECT, related_name="allocations")
     amount = models.DecimalField(max_digits=14, decimal_places=2, help_text="In bill currency")
+
+
+class BankReconciliation(NumberedMixin):
+    """Matching a bank account's ledger activity to a bank statement."""
+
+    SEQUENCE_KEY, SEQUENCE_PREFIX = "bank_rec", "REC-"
+    IN_PROGRESS, COMPLETED = "in_progress", "completed"
+    STATUSES = [(IN_PROGRESS, "In progress"), (COMPLETED, "Completed")]
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="reconciliations",
+                                limit_choices_to={"is_bank": True})
+    statement_date = models.DateField()
+    statement_balance = models.DecimalField("Statement ending balance", max_digits=14, decimal_places=2)
+    beginning_balance = models.DecimalField(max_digits=14, decimal_places=2, default=ZERO, editable=False)
+    status = models.CharField(max_length=12, choices=STATUSES, default=IN_PROGRESS, editable=False, db_index=True)
+    notes = models.TextField(blank=True)
+    unmatched = models.JSONField(default=list, blank=True, editable=False,
+                                 help_text="Imported statement lines without a ledger match")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                   editable=False, related_name="+")
+    completed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                     editable=False, related_name="+")
+    completed_at = models.DateTimeField(null=True, blank=True, editable=False)
+
+    class Meta:
+        unique_together = ("company", "number")
+        ordering = ["-statement_date", "-id"]
+        verbose_name = "bank reconciliation"
+
+    def __str__(self):
+        return f"{self.number} {self.account.name} {self.statement_date:%Y-%m-%d}"
+
+    def get_absolute_url(self):
+        return reverse("accounting:bankreconciliation_detail", args=[self.pk])
+
+    @property
+    def cleared_totals(self):
+        agg = self.cleared_lines.aggregate(dr=Sum("debit"), cr=Sum("credit"))
+        return agg["dr"] or ZERO, agg["cr"] or ZERO
+
+    @property
+    def cleared_balance(self):
+        dr, cr = self.cleared_totals
+        return self.beginning_balance + dr - cr
+
+    @property
+    def difference(self):
+        return self.statement_balance - self.cleared_balance
+
+
+class PeriodClose(TenantModel):
+    """Audit trail of month-end closes and reopens (the lock itself is Company.lock_date)."""
+
+    CLOSE, REOPEN = "close", "reopen"
+    ACTIONS = [(CLOSE, "Closed"), (REOPEN, "Reopened")]
+    action = models.CharField(max_length=10, choices=ACTIONS)
+    period_end = models.DateField(help_text="Month end the books were closed / reopened at")
+    lock_date = models.DateField(null=True, blank=True, help_text="Lock date after this action")
+    notes = models.TextField(blank=True)
+    warnings = models.JSONField(default=list, blank=True, help_text="Checklist items still open at close")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                             related_name="+")
+    at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-at", "-id"]
