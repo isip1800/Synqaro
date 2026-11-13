@@ -1,51 +1,127 @@
 {% extends "base.html" %}{% load erp %}
 {% block content %}
 <div class="page-head">
-  <div><h1>{{ object.name }}</h1><div class="sub">{{ object.code }} · {{ object.full_address|default:"no address" }}{% if object.sales_rep %} · Rep: <a href="{{ object.sales_rep.get_absolute_url }}">{{ object.sales_rep }}</a>{% endif %}</div></div>
+  <div><h1>{{ object.name }}{% if not object.is_active %} <span class="badge">inactive</span>{% endif %}</h1>
+    <div class="sub">{{ object.code }}{% if object.sales_rep %} · Rep <a href="{{ object.sales_rep.get_absolute_url }}">{{ object.sales_rep }}</a>{% endif %}{% if object.contact_name %} · {{ object.contact_name }}{% endif %}{% if object.email %} · <a href="mailto:{{ object.email }}">{{ object.email }}</a>{% endif %}{% if object.phone %} · {{ object.phone }}{% endif %}</div></div>
   <div class="actions">
     <a class="btn btn-primary" href="{% url 'sales:salesorder_create' %}?customer={{ object.pk }}">+ Quote / order</a>
-    <a class="btn" href="{% url 'accounting:customerpayment_create' %}?customer={{ object.pk }}">+ Payment</a>
+    {% if "accounting.post" in perms %}<a class="btn" href="{% url 'accounting:customerpayment_create' %}?customer={{ object.pk }}">+ Payment</a>{% endif %}
     <a class="btn" href="{% url 'sales:customer_statement' object.pk %}">Statement</a>
     <a class="btn" href="{% url 'core:email_compose' 'statement' object.pk %}">✉ Email statement</a>
     <a class="btn" href="{% url 'sales:customer_update' object.pk %}">Edit</a>
   </div>
 </div>
-<div class="kpis">
-  <div class="kpi"><div class="label">AR balance</div><div class="value">{{ object.balance|money }}</div></div>
-  <div class="kpi"><div class="label">Open orders (uninvoiced)</div><div class="value">{{ object.open_orders_value|money }}</div></div>
-  <div class="kpi {% if object.credit_available is not None and object.credit_available < 0 %}bad{% endif %}"><div class="label">Credit available</div><div class="value">{% if object.credit_limit %}{{ object.credit_available|money }}{% else %}No limit{% endif %}</div><div class="note">{% if object.credit_limit %}Limit {{ object.credit_limit|money }}{% endif %}</div></div>
-  <div class="kpi"><div class="label">Terms / pricing</div><div class="value" style="font-size:17px">{{ object.payment_terms_days }} days</div><div class="note">{{ object.price_list|default:"List prices" }}{% if object.tax_exempt %} · tax exempt{% endif %}</div></div>
+
+<div class="kpis compact">
+  <div class="kpi"><div class="label">AR balance</div><div class="value">{{ object.balance|money }}</div>{% if overdue_count %}<div class="note" style="color:#b42318">{{ overdue_count }} overdue invoice{{ overdue_count|pluralize }}</div>{% endif %}</div>
+  <div class="kpi"><div class="label">Open orders (uninvoiced)</div><div class="value">{{ object.open_orders_value|money }}</div><div class="note">{{ open_orders }} order{{ open_orders|pluralize }}</div></div>
+  <div class="kpi {% if object.credit_limit and object.credit_available < 0 %}bad{% endif %}"><div class="label">Credit available</div><div class="value">{% if object.credit_limit %}{{ object.credit_available|money }}{% else %}No limit{% endif %}</div>{% if object.credit_limit %}<div class="note">Limit {{ object.credit_limit|money }}</div>{% endif %}</div>
+  <div class="kpi"><div class="label">Terms</div><div class="value">Net {{ object.payment_terms_days }}</div><div class="note">{{ object.price_list|default:"List prices" }}{% if object.tax_exempt %} · tax exempt{% endif %}</div></div>
 </div>
-<div class="grid-2">
-  <div class="card table-wrap"><h3>Open invoices</h3><table class="table compact"><thead><tr><th>Invoice</th><th>Due</th><th class="num">Balance</th></tr></thead><tbody>
-  {% for i in open_invoices %}<tr><td><a href="{{ i.get_absolute_url }}">{{ i.number }}</a></td><td>{{ i.due_date|date:"Y-m-d" }}{% if i.due_date < today %} <span class="badge badge-overdue">overdue</span>{% endif %}</td><td class="num">{{ i.balance_due|money }}</td></tr>{% empty %}<tr><td colspan="3" class="empty">Nothing open.</td></tr>{% endfor %}
-  </tbody></table></div>
-  <div class="card table-wrap"><h3>Orders</h3><table class="table compact"><thead><tr><th>Order</th><th>Date</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
-  {% for o in orders %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a></td><td>{{ o.order_date|date:"Y-m-d" }}</td><td class="num">{{ o.total|money }}</td><td>{% status_badge o %}</td></tr>{% empty %}<tr><td colspan="4" class="empty">None.</td></tr>{% endfor %}
-  </tbody></table></div>
+
+<div class="tabs" data-tabs role="tablist">
+  <button type="button" data-tab="overview">Overview</button>
+  <button type="button" data-tab="orders">Orders<span class="count">{{ order_count }}</span></button>
+  <button type="button" data-tab="invoices">Invoices<span class="count {% if overdue_count %}alert{% endif %}">{{ open_invoices|length }} open</span></button>
+  <button type="button" data-tab="payments">Payments<span class="count">{{ payment_count }}</span></button>
+  <button type="button" data-tab="returns">Returns &amp; credits{% if open_chargebacks %}<span class="count alert">{{ open_chargebacks }}</span>{% elif returns_count %}<span class="count">{{ returns_count }}</span>{% endif %}</button>
+  <button type="button" data-tab="locations">Ship-to locations<span class="count">{{ locations|length }}</span></button>
+  <button type="button" data-tab="buyers">Buyers<span class="count">{{ buyers|length }}</span></button>
+  <button type="button" data-tab="notes">Notes, files &amp; history{% if note_count %}<span class="count">{{ note_count }}</span>{% endif %}</button>
 </div>
-<div class="grid-2">
-  <div class="card table-wrap"><h3>Invoice history</h3><table class="table compact"><tbody>
-  {% for i in invoices %}<tr><td><a href="{{ i.get_absolute_url }}">{{ i.number }}</a></td><td>{{ i.invoice_date|date:"Y-m-d" }}</td><td class="num">{{ i.total|money }}</td><td>{% status_badge i %}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}
+
+{# ------------------------------------------------------------------ Overview #}
+<section data-panel="overview">
+  <div class="grid-2">
+    <div class="card"><h3>Customer details</h3>
+      <dl class="facts">
+        <div><dt>Customer code</dt><dd>{{ object.code }}</dd></div>
+        <div><dt>Contact</dt><dd>{{ object.contact_name|default:"—" }}</dd></div>
+        <div><dt>Email</dt><dd>{% if object.email %}<a href="mailto:{{ object.email }}">{{ object.email }}</a>{% else %}—{% endif %}</dd></div>
+        <div><dt>Phone</dt><dd>{{ object.phone|default:"—" }}</dd></div>
+        <div><dt>Bill-to address</dt><dd>{{ object.full_address|default:"—"|linebreaksbr }}</dd></div>
+        <div><dt>Tax ID</dt><dd>{{ object.tax_id|default:"—" }}{% if object.tax_exempt %} <span class="badge">exempt</span>{% endif %}</dd></div>
+        <div><dt>Sales rep</dt><dd>{% if object.sales_rep %}<a href="{{ object.sales_rep.get_absolute_url }}">{{ object.sales_rep }}</a>{% else %}—{% endif %}</dd></div>
+        <div><dt>Payment terms</dt><dd>Net {{ object.payment_terms_days }} days</dd></div>
+        <div><dt>Credit limit</dt><dd>{% if object.credit_limit %}{{ object.credit_limit|money }}{% else %}No limit{% endif %}</dd></div>
+        <div><dt>Price list</dt><dd>{{ object.price_list|default:"List prices" }}</dd></div>
+        {% if unapplied_credit %}<div><dt>Unapplied credits</dt><dd>{{ unapplied_credit|money }}</dd></div>{% endif %}
+      </dl>
+      {% if object.notes %}<p class="muted" style="margin-top:14px">{{ object.notes|linebreaksbr }}</p>{% endif %}
+    </div>
+    <div>
+      <div class="card table-wrap"><div class="panel-head"><h3>Open invoices</h3></div><table class="table compact"><tbody>
+        {% for i in open_invoices|slice:":5" %}<tr><td><a href="{{ i.get_absolute_url }}">{{ i.number }}</a></td><td>due {{ i.due_date|date:"Y-m-d" }}{% if i.due_date < today %} <span class="badge badge-overdue">overdue</span>{% endif %}</td><td class="num">{{ i.balance_due|money }}</td></tr>{% empty %}<tr><td class="empty">Nothing open.</td></tr>{% endfor %}
+      </tbody></table></div>
+      <div class="card table-wrap"><div class="panel-head"><h3>Recent orders</h3></div><table class="table compact"><tbody>
+        {% for o in orders|slice:":5" %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a></td><td>{{ o.order_date|date:"Y-m-d" }}</td><td>{{ o.customer_po }}</td><td class="num">{{ o.total|money }}</td><td>{% status_badge o %}</td></tr>{% empty %}<tr><td class="empty">No orders yet.</td></tr>{% endfor %}
+      </tbody></table></div>
+    </div>
+  </div>
+</section>
+
+{# ------------------------------------------------------------------ Orders #}
+<section data-panel="orders"><div class="card table-wrap">
+  <div class="panel-head"><h3>Quotes &amp; sales orders</h3><div class="actions">{% if order_count > orders|length %}<a class="btn btn-sm" href="{% url 'sales:salesorder_list' %}?q={{ object.name|urlencode }}">View all {{ order_count }}</a>{% endif %}<a class="btn btn-sm btn-primary" href="{% url 'sales:salesorder_create' %}?customer={{ object.pk }}">+ Quote / order</a></div></div>
+  <table class="table compact"><thead><tr><th>Order</th><th>Date</th><th>Customer PO</th><th>Ship window</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
+  {% for o in orders %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a></td><td>{{ o.order_date|date:"Y-m-d" }}</td><td>{{ o.customer_po }}</td><td>{% if o.ship_start_date or o.cancel_date %}{{ o.ship_start_date|date:"m/d"|default:"…" }} – {{ o.cancel_date|date:"m/d"|default:"…" }}{% endif %}</td><td class="num">{{ o.total|money }}</td><td>{% status_badge o %}</td></tr>{% empty %}<tr><td colspan="6" class="empty">No orders yet.</td></tr>{% endfor %}
+  </tbody></table></div></section>
+
+{# ------------------------------------------------------------------ Invoices #}
+<section data-panel="invoices">
+  <div class="card table-wrap"><div class="panel-head"><h3>Open invoices</h3><div class="actions"><a class="btn btn-sm" href="{% url 'sales:customer_statement' object.pk %}">Statement</a></div></div>
+  <table class="table compact"><thead><tr><th>Invoice</th><th>Date</th><th>Due</th><th class="num">Total</th><th class="num">Balance</th></tr></thead><tbody>
+  {% for i in open_invoices %}<tr><td><a href="{{ i.get_absolute_url }}">{{ i.number }}</a></td><td>{{ i.invoice_date|date:"Y-m-d" }}</td><td>{{ i.due_date|date:"Y-m-d" }}{% if i.due_date < today %} <span class="badge badge-overdue">overdue</span>{% endif %}</td><td class="num">{{ i.total|money }}</td><td class="num">{{ i.balance_due|money }}</td></tr>{% empty %}<tr><td colspan="5" class="empty">Nothing open.</td></tr>{% endfor %}
   </tbody></table></div>
-  <div class="card table-wrap"><h3>Payments</h3><table class="table compact"><tbody>
-  {% for p in payments %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a></td><td>{{ p.date|date:"Y-m-d" }}</td><td>{{ p.get_method_display }}</td><td class="num">{{ p.amount|money }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}
+  <div class="card table-wrap"><div class="panel-head"><h3>Invoice history</h3>{% if invoice_count > invoices|length %}<div class="actions"><a class="btn btn-sm" href="{% url 'accounting:customerinvoice_list' %}?q={{ object.name|urlencode }}">View all {{ invoice_count }}</a></div>{% endif %}</div>
+  <table class="table compact"><thead><tr><th>Invoice</th><th>Date</th><th>Order</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
+  {% for i in invoices %}<tr><td><a href="{{ i.get_absolute_url }}">{{ i.number }}</a></td><td>{{ i.invoice_date|date:"Y-m-d" }}</td><td>{% if i.sales_order_id %}<a href="{{ i.sales_order.get_absolute_url }}">{{ i.sales_order.number }}</a>{% endif %}</td><td class="num">{{ i.total|money }}</td><td>{% status_badge i %}</td></tr>{% empty %}<tr><td colspan="5" class="empty">No invoices yet.</td></tr>{% endfor %}
   </tbody></table></div>
-</div>
-<div class="card table-wrap" id="locations"><div class="section-title" style="padding:14px 16px 0"><h3>Locations (ship-to) · {{ object.locations.count }}</h3>
-  <div class="actions"><a class="btn btn-sm" href="{% url 'sales:locations_export' object.pk %}">⬇ Export / template</a>
-  <form method="post" enctype="multipart/form-data" action="{% url 'sales:locations_import' object.pk %}" class="inline-form">{% csrf_token %}<input type="file" name="file" accept=".xlsx" required style="width:auto"><button class="btn btn-sm">⬆ Import</button></form>
-  <a class="btn btn-sm btn-primary" href="{% url 'sales:location_create' object.pk %}">+ Location</a></div></div>
-<table class="table compact"><thead><tr><th>Active</th><th>Location ID</th><th>Location name</th><th>City</th><th>State</th><th>Country</th><th>Default</th><th></th></tr></thead><tbody>
-{% for loc in object.locations.all %}<tr><td>{% if loc.is_active %}✓{% else %}—{% endif %}</td><td><a href="{% url 'sales:location_update' loc.pk %}">{{ loc.location_id }}</a></td><td>{{ loc.name }}</td><td>{{ loc.city }}</td><td>{{ loc.state }}</td><td>{{ loc.country }}</td><td>{% if loc.is_default %}✓{% endif %}</td>
-<td><form method="post" action="{% url 'sales:location_delete' loc.pk %}" class="inline" onsubmit="return confirm('Delete {{ loc }}?')">{% csrf_token %}<button class="link" title="Delete">✕</button></form></td></tr>
-{% empty %}<tr><td colspan="8" class="empty">No locations.</td></tr>{% endfor %}</tbody></table></div>
-<div class="card table-wrap"><div class="section-title" style="padding:14px 16px 0"><h3>Buyers</h3><a class="btn btn-sm" href="{% url 'sales:customer_update' object.pk %}">Add / edit buyers</a></div>
-<table class="table compact"><thead><tr><th>Name</th><th>Title</th><th>Email</th><th>Phone</th><th class="num">Open orders</th></tr></thead><tbody>
-{% for b in object.buyers.all %}<tr><td>{{ b.name }}{% if not b.is_active %} <span class="badge">inactive</span>{% endif %}</td><td>{{ b.title }}</td><td>{% if b.email %}<a href="mailto:{{ b.email }}">{{ b.email }}</a>{% endif %}</td><td>{{ b.phone }}</td><td class="num">{{ b.open_order_count }}</td></tr>
-{% empty %}<tr><td colspan="5" class="empty">No buyers yet.</td></tr>{% endfor %}</tbody></table></div>
-<div class="card"><h3>Contact</h3><dl class="dl-grid">
-  <div><dt>Contact</dt><dd>{{ object.contact_name|default:"—" }}</dd></div><div><dt>Email</dt><dd>{{ object.email|default:"—" }}</dd></div><div><dt>Phone</dt><dd>{{ object.phone|default:"—" }}</dd></div><div><dt>Tax ID</dt><dd>{{ object.tax_id|default:"—" }}</dd></div><div><dt>Ship to</dt><dd>{{ object.shipping_address|default:object.full_address|linebreaksbr }}</dd></div></dl>
-  {% if object.notes %}<p>{{ object.notes|linebreaksbr }}</p>{% endif %}</div>
-{% notes_and_files object %}
+</section>
+
+{# ------------------------------------------------------------------ Payments #}
+<section data-panel="payments"><div class="card table-wrap">
+  <div class="panel-head"><h3>Payments received</h3>{% if "accounting.post" in perms %}<div class="actions"><a class="btn btn-sm btn-primary" href="{% url 'accounting:customerpayment_create' %}?customer={{ object.pk }}">+ Payment</a></div>{% endif %}</div>
+  <table class="table compact"><thead><tr><th>Receipt</th><th>Date</th><th>Method</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>
+  {% for p in payments %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a></td><td>{{ p.date|date:"Y-m-d" }}</td><td>{{ p.get_method_display }}</td><td>{{ p.reference }}</td><td class="num">{{ p.amount|money }}</td><td>{% status_badge p %}</td></tr>{% empty %}<tr><td colspan="6" class="empty">No payments yet.</td></tr>{% endfor %}
+  </tbody></table></div></section>
+
+{# ------------------------------------------------------------------ Returns, credits & chargebacks #}
+<section data-panel="returns">
+  <div class="card table-wrap"><div class="panel-head"><h3>Chargebacks &amp; deductions</h3>{% if "returns.edit" in perms %}<div class="actions"><a class="btn btn-sm" href="{% url 'returns:chargeback_create' %}?customer={{ object.pk }}">+ Chargeback</a></div>{% endif %}</div>
+  <table class="table compact"><thead><tr><th>Chargeback</th><th>Date</th><th>Type</th><th>Deduction #</th><th>Invoice</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>
+  {% for c in chargebacks %}<tr><td><a href="{{ c.get_absolute_url }}">{{ c.number }}</a></td><td>{{ c.date|date:"Y-m-d" }}</td><td>{{ c.get_chargeback_type_display }}</td><td>{{ c.deduction_reference }}</td><td>{% if c.invoice %}<a href="{{ c.invoice.get_absolute_url }}">{{ c.invoice.number }}</a>{% endif %}</td><td class="num">{{ c.amount|money }}</td><td>{% status_badge c %}</td></tr>{% empty %}<tr><td colspan="7" class="empty">No chargebacks.</td></tr>{% endfor %}
+  </tbody></table></div>
+  <div class="grid-2">
+    <div class="card table-wrap"><div class="panel-head"><h3>Returns (RMA)</h3>{% if "returns.edit" in perms %}<div class="actions"><a class="btn btn-sm" href="{% url 'returns:customerreturn_create' %}?customer={{ object.pk }}">+ Return</a></div>{% endif %}</div>
+    <table class="table compact"><tbody>
+    {% for r in returns %}<tr><td><a href="{{ r.get_absolute_url }}">{{ r.number }}</a></td><td>{{ r.date|date:"Y-m-d" }}</td><td>{{ r.get_reason_display }}</td><td class="num">{{ r.total|money }}</td><td>{% status_badge r %}</td></tr>{% empty %}<tr><td class="empty">No returns.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <div class="card table-wrap"><div class="panel-head"><h3>Credit memos</h3>{% if "accounting.post" in perms %}<div class="actions"><a class="btn btn-sm" href="{% url 'returns:creditmemo_create' %}?customer={{ object.pk }}">+ Credit memo</a></div>{% endif %}</div>
+    <table class="table compact"><tbody>
+    {% for m in credit_memos %}<tr><td><a href="{{ m.get_absolute_url }}">{{ m.number }}</a></td><td>{{ m.date|date:"Y-m-d" }}</td><td class="num">{{ m.total|money }}</td><td class="num muted">{% if m.unapplied %}{{ m.unapplied|money }} left{% endif %}</td><td>{% status_badge m %}</td></tr>{% empty %}<tr><td class="empty">No credit memos.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+</section>
+
+{# ------------------------------------------------------------------ Locations #}
+<section data-panel="locations"><div class="card table-wrap" id="locations">
+  <div class="panel-head"><h3>Ship-to locations</h3>
+    <div class="actions"><a class="btn btn-sm" href="{% url 'sales:locations_export' object.pk %}">⬇ Export / template</a>
+    <form method="post" enctype="multipart/form-data" action="{% url 'sales:locations_import' object.pk %}" class="inline-form">{% csrf_token %}<input type="file" name="file" accept=".xlsx" required style="width:auto"><button class="btn btn-sm">⬆ Import</button></form>
+    <a class="btn btn-sm btn-primary" href="{% url 'sales:location_create' object.pk %}">+ Location</a></div></div>
+  <table class="table compact"><thead><tr><th>Location ID</th><th>Location name</th><th>City</th><th>State</th><th>Country</th><th>Default</th><th>Active</th><th></th></tr></thead><tbody>
+  {% for loc in locations %}<tr><td><a href="{% url 'sales:location_update' loc.pk %}">{{ loc.location_id }}</a></td><td>{{ loc.name }}</td><td>{{ loc.city }}</td><td>{{ loc.state }}</td><td>{{ loc.country }}</td><td>{% if loc.is_default %}✓{% endif %}</td><td>{% if loc.is_active %}✓{% else %}—{% endif %}</td>
+  <td class="num"><form method="post" action="{% url 'sales:location_delete' loc.pk %}" class="inline" onsubmit="return confirm('Delete {{ loc }}?')">{% csrf_token %}<button class="link" title="Delete">✕</button></form></td></tr>
+  {% empty %}<tr><td colspan="8" class="empty">No locations yet. Orders need a ship-to location.</td></tr>{% endfor %}</tbody></table></div></section>
+
+{# ------------------------------------------------------------------ Buyers #}
+<section data-panel="buyers"><div class="card table-wrap">
+  <div class="panel-head"><h3>Buyers</h3><div class="actions"><a class="btn btn-sm" href="{% url 'sales:customer_update' object.pk %}">Add / edit buyers</a></div></div>
+  <table class="table compact"><thead><tr><th>Name</th><th>Title</th><th>Email</th><th>Phone</th><th class="num">Open orders</th></tr></thead><tbody>
+  {% for b in buyers %}<tr><td>{{ b.name }}{% if not b.is_active %} <span class="badge">inactive</span>{% endif %}</td><td>{{ b.title }}</td><td>{% if b.email %}<a href="mailto:{{ b.email }}">{{ b.email }}</a>{% endif %}</td><td>{{ b.phone }}</td><td class="num">{{ b.open_order_count }}</td></tr>
+  {% empty %}<tr><td colspan="5" class="empty">No buyers yet.</td></tr>{% endfor %}</tbody></table></div></section>
+
+{# ------------------------------------------------------------------ Notes, files & history #}
+<section data-panel="notes">{% notes_and_files object %}</section>
 {% endblock %}
