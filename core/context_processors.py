@@ -50,6 +50,8 @@ NAV = [
     ]),
     ("Settings", [
         ("Company", "core:company", "settings/company"),
+        ("Users & Roles", "core:user_list", "settings/users"),
+        ("Companies", "core:company_list", "settings/companies"),
         ("Currencies & FX Rates", "core:exchangerate_list", "settings/rates"),
         ("Vendor Portal Users", "portal:contact_list", "portal-users"),
         ("Email", "core:email_settings", "settings/email"),
@@ -57,10 +59,47 @@ NAV = [
 ]
 
 
+def _nav_for(request):
+    from django.urls import NoReverseMatch, resolve, reverse
+
+    from .permissions import required_permission
+
+    perms = getattr(request, "perms", frozenset())
+    out = []
+    for section, items in NAV:
+        allowed = []
+        for label, url_name, key in items:
+            try:
+                match = resolve(reverse(url_name))
+            except NoReverseMatch:
+                continue
+            need = required_permission(match.namespace, match.url_name or "", "GET")
+            if not need or need in perms:
+                allowed.append((label, url_name, key))
+        if allowed:
+            out.append((section, allowed))
+    return out
+
+
 def erp(request):
+    from .models import Membership
+
     user = getattr(request, "user", None)
+    perms = getattr(request, "perms", frozenset())
+    companies = []
+    if user is not None and user.is_authenticated and not is_vendor_user(user):
+        if user.is_superuser:
+            companies = list(Company.objects.filter(is_active=True).order_by("name"))
+        else:
+            companies = [m.company for m in Membership.objects.filter(user=user, is_active=True,
+                                                                      company__is_active=True)
+                         .select_related("company")]
     return {
-        "company": Company.get(),
-        "nav": NAV,
+        "company": getattr(request, "company", None) or Company.get(),
+        "nav": _nav_for(request) if user is not None and user.is_authenticated else NAV,
         "is_vendor_user": bool(user and is_vendor_user(user)),
+        "perms": perms,
+        "can_see_costs": "costs.view" in perms,
+        "my_companies": companies,
+        "membership": getattr(request, "membership", None),
     }

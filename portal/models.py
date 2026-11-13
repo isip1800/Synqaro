@@ -2,8 +2,10 @@ from django.conf import settings
 from django.db import models
 from django.urls import reverse
 
+from core.tenancy import TenantModel
 
-class VendorContact(models.Model):
+
+class VendorContact(TenantModel):
     """Links a login to a vendor so the person can use the vendor portal."""
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="vendor_contact")

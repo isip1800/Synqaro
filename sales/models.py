@@ -6,11 +6,12 @@ from django.db.models import Sum
 from django.urls import reverse
 
 from core.models import AddressMixin, NumberedMixin, TimeStamped
+from core.tenancy import TenantModel
 from core.utils import ZERO, money
 
 
-class Customer(AddressMixin, TimeStamped):
-    code = models.CharField(max_length=20, unique=True)
+class Customer(TenantModel, AddressMixin, TimeStamped):
+    code = models.CharField(max_length=20)
     name = models.CharField(max_length=200)
     contact_name = models.CharField(max_length=100, blank=True)
     email = models.EmailField(blank=True)
@@ -28,6 +29,7 @@ class Customer(AddressMixin, TimeStamped):
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        unique_together = ("company", "code")
         ordering = ["name"]
 
     def __str__(self):
@@ -75,7 +77,7 @@ class Customer(AddressMixin, TimeStamped):
         return self.credit_limit - self.balance - self.open_orders_value
 
 
-class CustomerLocation(models.Model):
+class CustomerLocation(TenantModel):
     """Ship-to location (store / DC) of a customer, e.g. 893 - TJ MAXX #893."""
 
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="locations")
@@ -115,7 +117,7 @@ class CustomerLocation(models.Model):
                 .update(is_default=False)
 
 
-class CustomerBuyer(models.Model):
+class CustomerBuyer(TenantModel):
     """A buyer (purchasing contact) at a customer. A customer can have several."""
 
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="buyers")
@@ -196,6 +198,7 @@ class SalesOrder(NumberedMixin, TimeStamped):
                                    editable=False)
 
     class Meta:
+        unique_together = ("company", "number")
         ordering = ["-order_date", "-id"]
 
     def get_absolute_url(self):
@@ -264,7 +267,7 @@ class SalesOrder(NumberedMixin, TimeStamped):
         return sum((line.qty_to_ship for line in self.lines.all()), ZERO)
 
 
-class SalesOrderLine(models.Model):
+class SalesOrderLine(TenantModel):
     order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE, related_name="lines")
     product = models.ForeignKey("products.Product", on_delete=models.PROTECT, related_name="so_lines")
     warehouse = models.ForeignKey("inventory.Warehouse", on_delete=models.PROTECT, related_name="so_lines",
@@ -328,6 +331,7 @@ class Delivery(NumberedMixin):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
 
     class Meta:
+        unique_together = ("company", "number")
         ordering = ["-date", "-id"]
         verbose_name_plural = "deliveries"
 
@@ -339,7 +343,7 @@ class Delivery(NumberedMixin):
         return money(sum((line.quantity * line.unit_cost for line in self.lines.all()), ZERO))
 
 
-class DeliveryLine(models.Model):
+class DeliveryLine(TenantModel):
     delivery = models.ForeignKey(Delivery, on_delete=models.CASCADE, related_name="lines")
     so_line = models.ForeignKey(SalesOrderLine, on_delete=models.PROTECT, related_name="delivery_lines")
     quantity = models.DecimalField(max_digits=14, decimal_places=3)

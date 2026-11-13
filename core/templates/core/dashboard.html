@@ -11,11 +11,13 @@
   </div>
 </div>
 <div class="kpis">
-  <div class="kpi"><div class="label">Sales this month</div><div class="value">{{ sales_mtd|money }}</div><div class="note">Gross margin {{ margin_mtd|money }}{% if margin_pct is not None %} · {{ margin_pct|pct }}{% endif %}</div></div>
+  {% if "accounting.view" in perms or "sales.view" in perms %}<div class="kpi"><div class="label">Sales this month</div><div class="value">{{ sales_mtd|money }}</div><div class="note">{% if can_see_costs %}Gross margin {{ margin_mtd|money }}{% if margin_pct is not None %} · {{ margin_pct|pct }}{% endif %}{% endif %}</div></div>{% endif %}
+  {% if "accounting.view" in perms %}
   <div class="kpi"><div class="label">Receivables open</div><div class="value">{{ ar_total|money }}</div><div class="note"><a href="{% url 'accounting:ar_aging' %}">AR aging →</a></div></div>
   <div class="kpi {% if overdue_count %}bad{% endif %}"><div class="label">Overdue invoices</div><div class="value">{{ overdue_total|money }}</div><div class="note">{{ overdue_count }} invoice{{ overdue_count|pluralize }}</div></div>
   <div class="kpi"><div class="label">Payables open</div><div class="value">{{ ap_total|money }}</div><div class="note">Due within 7 days: {{ ap_due_week|money }}</div></div>
-  <div class="kpi"><div class="label">Inventory value</div><div class="value">{{ inv_value|money }}</div><div class="note">At average landed cost</div></div>
+  {% endif %}
+  {% if can_see_costs %}<div class="kpi"><div class="label">Inventory value</div><div class="value">{{ inv_value|money }}</div><div class="note">At average landed cost</div></div>{% endif %}
   <div class="kpi"><div class="label">Open POs</div><div class="value">{{ open_pos }}</div><div class="note">{{ quotes }} open quote{{ quotes|pluralize }}</div></div>
 </div>
 <div class="grid-2">

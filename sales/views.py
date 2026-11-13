@@ -3,6 +3,7 @@ import datetime
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.urls import reverse_lazy
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -86,6 +87,7 @@ def customer_statement(request, pk):
 # ----------------------------------------------------------------------------- Sales orders
 
 class OrderList(ErpListView):
+    create_url = reverse_lazy("sales:salesorder_create")
     model = SalesOrder
     title = "Sales Orders & Quotes"
     columns = (("Number", "number"), ("Customer", "customer"), ("Ship to", "ship_to"), ("Customer PO #", "customer_po"),
@@ -101,6 +103,7 @@ class OrderList(ErpListView):
                          ("Total", "total"), ("Uninvoiced total", "uninvoiced_total"),
                          ("Est. margin", "estimated_margin"), ("Status", "status"),
                          ("Approval reason", "approval_reason"))
+    cost_columns = ("estimated_margin",)
     search_fields = ("number", "customer__name", "customer_po", "master_customer_po", "buyer__name",
                      "ship_to__location_id", "ship_to__name")
     select_related = ("customer", "sales_rep", "buyer", "warehouse", "ship_to")

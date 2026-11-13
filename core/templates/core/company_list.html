@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h1>Companies</h1><div class="sub">Every company has its own items, customers, vendors, orders, inventory and books. Switch with the company menu at the top.</div></div></div>
+<div class="card table-wrap"><table class="table"><thead><tr><th>Company</th><th>Your role</th><th class="num">Active users</th><th>Base currency</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr><td><strong>{{ r.company.name }}</strong>{% if r.current %} <span class="badge badge-posted">current</span>{% endif %}</td><td>{{ r.role }}</td><td class="num">{{ r.seats }}</td><td>{{ r.company.base_currency_id }}</td>
+<td>{% if not r.current %}<form method="post" action="{% url 'core:switch_company' %}" class="inline">{% csrf_token %}<input type="hidden" name="company_id" value="{{ r.company.pk }}"><button class="btn btn-sm">Switch to</button></form>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_create %}<form method="post" class="card form-card" style="max-width:640px">{% csrf_token %}<h3>New company</h3>
+  <div class="form-grid">{% for field in form.visible_fields %}{% include "core/_field.html" %}{% endfor %}</div>
+  <p class="muted">The new company starts with its own chart of accounts, a MAIN warehouse and the standard roles; you become its Owner.</p>
+  <div class="form-actions"><button class="btn btn-primary">Create company</button></div></form>{% endif %}
+{% endblock %}

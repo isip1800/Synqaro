@@ -182,7 +182,10 @@ def send_document_email(key, obj, to, cc, subject, body, attach_pdf=True, attach
 
 def _target(ct_id, obj_id):
     ct = get_object_or_404(ContentType, pk=ct_id)
-    obj = ct.get_object_for_this_type(pk=obj_id)
+    model = ct.model_class()
+    if model is None:
+        raise Http404
+    obj = get_object_or_404(model._default_manager, pk=obj_id)  # company-scoped
     return ct, obj
 
 
@@ -222,7 +225,7 @@ def file_download(request, pk):
 @require_POST
 def file_delete(request, pk):
     att = get_object_or_404(Attachment, pk=pk)
-    obj = att.content_type.get_object_for_this_type(pk=att.object_id)
+    _, obj = _target(att.content_type_id, att.object_id)
     att.delete()
     messages.success(request, f"Deleted {att.filename}.")
     return _back(obj)
@@ -242,14 +245,27 @@ def note_add(request, ct_id, obj_id):
 @require_POST
 def note_delete(request, pk):
     note = get_object_or_404(Note, pk=pk)
-    obj = note.content_type.get_object_for_this_type(pk=note.object_id)
+    _, obj = _target(note.content_type_id, note.object_id)
     if note.author_id == request.user.id or request.user.is_superuser:
         note.delete()
     return _back(obj)
 
 
+DOCUMENT_PERMS = {"sales_order": "sales.view", "purchase_order": "costs.view", "invoice": "accounting.view",
+                  "statement": "accounting.view"}
+
+
+def _check_doc_perm(request, key):
+    from django.core.exceptions import PermissionDenied
+
+    need = DOCUMENT_PERMS.get(key)
+    if need and need not in getattr(request, "perms", ()):
+        raise PermissionDenied(f"Needs permission {need}")
+
+
 @internal_required
 def print_document(request, key, pk):
+    _check_doc_perm(request, key)
     obj = get_object_or_404(_model(key), pk=pk)
     if request.GET.get("format") == "pdf":
         resp = HttpResponse(render_pdf(key, obj), content_type="application/pdf")
@@ -260,6 +276,7 @@ def print_document(request, key, pk):
 
 @internal_required
 def email_compose(request, key, pk):
+    _check_doc_perm(request, key)
     obj = get_object_or_404(_model(key), pk=pk)
     kind = DOCUMENTS[key][2]
     tpl = get_template(kind)

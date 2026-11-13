@@ -6,10 +6,11 @@ from django.db.models import Sum
 from django.urls import reverse
 
 from core.models import NumberedMixin
+from core.tenancy import TenantModel
 from core.utils import ZERO
 
 
-class SalesRep(models.Model):
+class SalesRep(TenantModel):
     REVENUE, MARGIN = "revenue", "margin"
     BASES = [(REVENUE, "% of net revenue"), (MARGIN, "% of gross margin")]
     ON_INVOICE, ON_PAYMENT = "invoiced", "paid"
@@ -17,7 +18,7 @@ class SalesRep(models.Model):
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                 related_name="sales_rep", help_text="Login used by this sales person")
-    code = models.CharField(max_length=20, unique=True)
+    code = models.CharField(max_length=20)
     name = models.CharField(max_length=100)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=50, blank=True)
@@ -31,6 +32,7 @@ class SalesRep(models.Model):
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        unique_together = ("company", "code")
         ordering = ["name"]
         verbose_name = "sales person"
         verbose_name_plural = "sales people"
@@ -68,10 +70,11 @@ class CommissionPayout(NumberedMixin):
     journal_entry = models.ForeignKey("accounting.JournalEntry", null=True, blank=True, on_delete=models.SET_NULL)
 
     class Meta:
+        unique_together = ("company", "number")
         ordering = ["-date", "-id"]
 
 
-class Commission(models.Model):
+class Commission(TenantModel):
     ACCRUED, APPROVED, PAID = "accrued", "approved", "paid"
     STATUSES = [(ACCRUED, "Accrued"), (APPROVED, "Approved"), (PAID, "Paid")]
     rep = models.ForeignKey(SalesRep, on_delete=models.PROTECT, related_name="commissions")

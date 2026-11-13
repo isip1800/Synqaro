@@ -207,3 +207,4 @@ details.dropdown > summary::-webkit-details-marker { display: none; }
 .note { border-top: 1px solid var(--border); padding: 8px 0; }
 .note-meta { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; margin-bottom: 2px; }
 .line-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border); display: block; background: #fff; }
+.company-switch select { width: auto; font-weight: 600; }

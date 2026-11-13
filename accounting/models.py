@@ -6,23 +6,25 @@ from django.db.models import Sum
 from django.urls import reverse
 
 from core.models import NumberedMixin
+from core.tenancy import TenantModel
 from core.utils import ZERO, money
 
 
-class Account(models.Model):
+class Account(TenantModel):
     ASSET, LIABILITY, EQUITY, INCOME, EXPENSE = "asset", "liability", "equity", "income", "expense"
     TYPES = [(ASSET, "Asset"), (LIABILITY, "Liability"), (EQUITY, "Equity"), (INCOME, "Income"),
              (EXPENSE, "Expense")]
-    code = models.CharField(max_length=20, unique=True)
+    code = models.CharField(max_length=20)
     name = models.CharField(max_length=150)
     account_type = models.CharField(max_length=10, choices=TYPES)
     is_bank = models.BooleanField(default=False, help_text="Cash / bank account usable for payments")
-    system_key = models.CharField(max_length=30, blank=True, null=True, unique=True, editable=False,
+    system_key = models.CharField(max_length=30, blank=True, null=True, editable=False,
                                   help_text="Used by automatic postings")
     description = models.CharField(max_length=255, blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        unique_together = [("company", "code"), ("company", "system_key")]
         ordering = ["code"]
 
     def __str__(self):
@@ -70,6 +72,7 @@ class JournalEntry(NumberedMixin):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        unique_together = ("company", "number")
         ordering = ["-date", "-id"]
         verbose_name_plural = "journal entries"
 
@@ -81,7 +84,7 @@ class JournalEntry(NumberedMixin):
         return self.lines.aggregate(t=Sum("debit"))["t"] or ZERO
 
 
-class JournalLine(models.Model):
+class JournalLine(TenantModel):
     entry = models.ForeignKey(JournalEntry, on_delete=models.CASCADE, related_name="lines")
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="lines")
     description = models.CharField(max_length=255, blank=True)
@@ -125,6 +128,7 @@ class CustomerInvoice(NumberedMixin):
                                       editable=False)
 
     class Meta:
+        unique_together = ("company", "number")
         ordering = ["-invoice_date", "-id"]
         verbose_name = "customer invoice"
 
@@ -158,7 +162,7 @@ class CustomerInvoice(NumberedMixin):
         return self.subtotal - self.cost_total
 
 
-class CustomerInvoiceLine(models.Model):
+class CustomerInvoiceLine(TenantModel):
     invoice = models.ForeignKey(CustomerInvoice, on_delete=models.CASCADE, related_name="lines")
     so_line = models.ForeignKey("sales.SalesOrderLine", null=True, blank=True, on_delete=models.PROTECT,
                                 related_name="invoice_lines", editable=False)
@@ -200,6 +204,7 @@ class CustomerPayment(NumberedMixin):
                                       editable=False)
 
     class Meta:
+        unique_together = ("company", "number")
         ordering = ["-date", "-id"]
 
     def get_absolute_url(self):
@@ -214,7 +219,7 @@ class CustomerPayment(NumberedMixin):
         return self.amount - self.allocated
 
 
-class CustomerPaymentAllocation(models.Model):
+class CustomerPaymentAllocation(TenantModel):
     payment = models.ForeignKey(CustomerPayment, on_delete=models.CASCADE, related_name="allocations")
     invoice = models.ForeignKey(CustomerInvoice, on_delete=models.PROTECT, related_name="allocations")
     amount = models.DecimalField(max_digits=14, decimal_places=2)
@@ -252,6 +257,7 @@ class VendorBill(NumberedMixin):
                                       editable=False)
 
     class Meta:
+        unique_together = ("company", "number")
         ordering = ["-bill_date", "-id"]
         verbose_name = "vendor bill"
 
@@ -277,7 +283,7 @@ class VendorBill(NumberedMixin):
         return money(self.balance_due * self.exchange_rate)
 
 
-class VendorBillLine(models.Model):
+class VendorBillLine(TenantModel):
     bill = models.ForeignKey(VendorBill, on_delete=models.CASCADE, related_name="lines")
     po_line = models.ForeignKey("purchasing.PurchaseOrderLine", null=True, blank=True, on_delete=models.PROTECT,
                                 related_name="bill_lines")
@@ -317,6 +323,7 @@ class VendorPayment(NumberedMixin):
                                       editable=False)
 
     class Meta:
+        unique_together = ("company", "number")
         ordering = ["-date", "-id"]
 
     def get_absolute_url(self):
@@ -331,7 +338,7 @@ class VendorPayment(NumberedMixin):
         return self.amount - self.allocated
 
 
-class VendorPaymentAllocation(models.Model):
+class VendorPaymentAllocation(TenantModel):
     payment = models.ForeignKey(VendorPayment, on_delete=models.CASCADE, related_name="allocations")
     bill = models.ForeignKey(VendorBill, on_delete=models.PROTECT, related_name="allocations")
     amount = models.DecimalField(max_digits=14, decimal_places=2, help_text="In bill currency")

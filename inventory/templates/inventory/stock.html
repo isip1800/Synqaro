@@ -10,9 +10,9 @@
   <button class="btn">Filter</button>
 </form>
 <div class="card table-wrap"><table class="table">
-<thead><tr><th>Product</th>{% for w in warehouses %}<th class="num">{{ w.code }}</th>{% endfor %}<th class="num">Total</th><th class="num">Avg cost</th><th class="num">Value</th></tr></thead>
-<tbody>{% for r in rows %}<tr><td><a href="{{ r.product.get_absolute_url }}">{{ r.product }}</a></td>{% for q in r.per_wh %}<td class="num">{{ q|qty }}</td>{% endfor %}<td class="num"><strong>{{ r.total|qty }}</strong></td><td class="num">{{ r.product.avg_cost|unitcost }}</td><td class="num">{{ r.value|money }}</td></tr>
+<thead><tr><th>Product</th>{% for w in warehouses %}<th class="num">{{ w.code }}</th>{% endfor %}<th class="num">Total</th>{% if can_see_costs %}<th class="num">Avg cost</th><th class="num">Value</th>{% endif %}</tr></thead>
+<tbody>{% for r in rows %}<tr><td><a href="{{ r.product.get_absolute_url }}">{{ r.product }}</a></td>{% for q in r.per_wh %}<td class="num">{{ q|qty }}</td>{% endfor %}<td class="num"><strong>{{ r.total|qty }}</strong></td>{% if can_see_costs %}<td class="num">{{ r.product.avg_cost|unitcost }}</td><td class="num">{{ r.value|money }}</td>{% endif %}</tr>
 {% empty %}<tr><td colspan="99" class="empty">No stock.</td></tr>{% endfor %}</tbody>
-<tfoot><tr><td colspan="{{ warehouses|length|add:3 }}">Total inventory value</td><td class="num">{{ total_value|money }}</td></tr></tfoot>
+{% if can_see_costs %}<tfoot><tr><td colspan="{{ warehouses|length|add:3 }}">Total inventory value</td><td class="num">{{ total_value|money }}</td></tr></tfoot>{% endif %}
 </table></div>
 {% endblock %}

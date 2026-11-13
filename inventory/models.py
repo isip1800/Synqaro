@@ -3,15 +3,17 @@ from django.db import models
 from django.urls import reverse
 
 from core.models import AddressMixin, NumberedMixin
+from core.tenancy import TenantModel
 from core.utils import ZERO
 
 
-class Warehouse(AddressMixin):
-    code = models.CharField(max_length=20, unique=True)
+class Warehouse(TenantModel, AddressMixin):
+    code = models.CharField(max_length=20)
     name = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        unique_together = ("company", "code")
         ordering = ["code"]
 
     def __str__(self):
@@ -21,7 +23,7 @@ class Warehouse(AddressMixin):
         return reverse("inventory:warehouse_detail", args=[self.pk])
 
 
-class StockQuant(models.Model):
+class StockQuant(TenantModel):
     product = models.ForeignKey("products.Product", on_delete=models.CASCADE, related_name="quants")
     warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name="quants")
     quantity = models.DecimalField(max_digits=14, decimal_places=3, default=ZERO)
@@ -33,7 +35,7 @@ class StockQuant(models.Model):
         return f"{self.product.sku} @ {self.warehouse.code}: {self.quantity}"
 
 
-class StockMove(models.Model):
+class StockMove(TenantModel):
     RECEIPT = "receipt"
     SHIPMENT = "shipment"
     ADJUSTMENT = "adjustment"
@@ -89,13 +91,14 @@ class StockAdjustment(NumberedMixin):
                                    editable=False)
 
     class Meta:
+        unique_together = ("company", "number")
         ordering = ["-date", "-id"]
 
     def get_absolute_url(self):
         return reverse("inventory:stockadjustment_detail", args=[self.pk])
 
 
-class StockAdjustmentLine(models.Model):
+class StockAdjustmentLine(TenantModel):
     adjustment = models.ForeignKey(StockAdjustment, on_delete=models.CASCADE, related_name="lines")
     product = models.ForeignKey("products.Product", on_delete=models.PROTECT)
     quantity = models.DecimalField("Qty change (+/-)", max_digits=14, decimal_places=3)
@@ -118,13 +121,14 @@ class StockTransfer(NumberedMixin):
                                    editable=False)
 
     class Meta:
+        unique_together = ("company", "number")
         ordering = ["-date", "-id"]
 
     def get_absolute_url(self):
         return reverse("inventory:stocktransfer_detail", args=[self.pk])
 
 
-class StockTransferLine(models.Model):
+class StockTransferLine(TenantModel):
     transfer = models.ForeignKey(StockTransfer, on_delete=models.CASCADE, related_name="lines")
     product = models.ForeignKey("products.Product", on_delete=models.PROTECT)
     quantity = models.DecimalField(max_digits=14, decimal_places=3)

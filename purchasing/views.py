@@ -5,6 +5,7 @@ from django.db.models import Prefetch
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.urls import reverse_lazy
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -62,6 +63,7 @@ class VendorDetail(ErpDetailView):
 # ----------------------------------------------------------------------------- Purchase orders
 
 class POList(ErpListView):
+    create_url = reverse_lazy("purchasing:purchaseorder_create")
     model = PurchaseOrder
     title = "Purchase Orders"
     columns = (("PO", "number"), ("Vendor", "vendor"), ("Date", "order_date"), ("Expected", "expected_date"),
@@ -75,6 +77,7 @@ class POList(ErpListView):
                          ("Status", "status"))
     search_fields = ("number", "vendor__name", "vendor_reference")
     select_related = ("vendor", "currency", "warehouse")
+    cost_columns = ("total", "total_base", "fs_totals.usd", "fs_totals.rmb", "exchange_rate")
 
     def get_queryset(self):
         return super().get_queryset().prefetch_related("lines")
@@ -135,7 +138,7 @@ class PODetail(ErpDetailView):
             shipments=Shipment.objects.filter(lines__po_line__order=po).distinct(),
             today=datetime.date.today(),
             base=Company.get().base_currency_id,
-            fs=po.fs_totals,
+            fs=po.fs_totals if "costs.view" in getattr(self.request, "perms", ()) else {"any": False},
         )
         return ctx
 
@@ -372,6 +375,7 @@ class ReceiptList(ErpListView):
     title = "Goods Receipts"
     columns = (("Receipt", "number"), ("Date", "date"), ("PO", "purchase_order"), ("Shipment", "shipment"),
                ("Warehouse", "warehouse"), ("Value", "total_value"))
+    cost_columns = ("total_value",)
     search_fields = ("number", "purchase_order__number", "shipment__number")
     select_related = ("purchase_order", "shipment", "warehouse")
 

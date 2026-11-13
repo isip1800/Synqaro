@@ -4,11 +4,11 @@
 <form class="toolbar" method="get"><input type="month" name="month" value="{{ month|date:'Y-m' }}"><button class="btn">Show</button></form>
 <div class="kpis">
   <div class="kpi"><div class="label">Team revenue</div><div class="value">{{ totals.revenue|money }}</div><div class="note">Target {{ totals.target|money }}</div></div>
-  <div class="kpi"><div class="label">Team margin</div><div class="value">{{ totals.margin|money }}</div></div>
+  {% if can_see_costs %}<div class="kpi"><div class="label">Team margin</div><div class="value">{{ totals.margin|money }}</div></div>{% endif %}
   <div class="kpi"><div class="label">Commissions accrued</div><div class="value">{{ totals.commission|money }}</div></div>
 </div>
-<div class="card table-wrap"><table class="table"><thead><tr><th>Sales person</th><th>Territory</th><th class="num">Invoices</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th><th class="num">Target</th><th style="min-width:180px">Attainment</th><th class="num">Commission</th></tr></thead><tbody>
-{% for r in rows %}<tr><td><a href="{{ r.rep.get_absolute_url }}">{{ r.rep }}</a></td><td>{{ r.rep.territory|default:"—" }}</td><td class="num">{{ r.count }}</td><td class="num">{{ r.revenue|money }}</td><td class="num">{{ r.margin|money }}</td><td class="num">{{ r.margin_pct|pct }}</td><td class="num">{{ r.rep.monthly_target|money }}</td><td><div style="display:flex;gap:8px;align-items:center"><div class="bar" style="flex:1"><span style="width:{{ r.bar|floatformat:0 }}%"></span></div><span class="muted" style="min-width:52px;text-align:right">{{ r.pct|pct }}</span></div></td><td class="num">{{ r.commission|money }}</td></tr>
+<div class="card table-wrap"><table class="table"><thead><tr><th>Sales person</th><th>Territory</th><th class="num">Invoices</th><th class="num">Revenue</th>{% if can_see_costs %}<th class="num">Margin</th><th class="num">Margin %</th>{% endif %}<th class="num">Target</th><th style="min-width:180px">Attainment</th><th class="num">Commission</th></tr></thead><tbody>
+{% for r in rows %}<tr><td><a href="{{ r.rep.get_absolute_url }}">{{ r.rep }}</a></td><td>{{ r.rep.territory|default:"—" }}</td><td class="num">{{ r.count }}</td><td class="num">{{ r.revenue|money }}</td>{% if can_see_costs %}<td class="num">{{ r.margin|money }}</td><td class="num">{{ r.margin_pct|pct }}</td>{% endif %}<td class="num">{{ r.rep.monthly_target|money }}</td><td><div style="display:flex;gap:8px;align-items:center"><div class="bar" style="flex:1"><span style="width:{{ r.bar|floatformat:0 }}%"></span></div><span class="muted" style="min-width:52px;text-align:right">{{ r.pct|pct }}</span></div></td><td class="num">{{ r.commission|money }}</td></tr>
 {% empty %}<tr><td colspan="9" class="empty">No active sales people.</td></tr>{% endfor %}
 </tbody></table></div>
 {% endblock %}

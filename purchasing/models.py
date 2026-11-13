@@ -6,6 +6,7 @@ from django.db.models import Sum
 from django.urls import reverse
 
 from core.models import AddressMixin, NumberedMixin, TimeStamped
+from core.tenancy import TenantModel
 from core.utils import ZERO, money
 
 INCOTERMS = [
@@ -23,7 +24,7 @@ INCOTERMS = [
 ]
 
 
-class Vendor(AddressMixin, TimeStamped):
+class Vendor(TenantModel, AddressMixin, TimeStamped):
     SUPPLIER, FORWARDER, BROKER, CARRIER, OTHER = "supplier", "forwarder", "broker", "carrier", "other"
     TYPES = [
         (SUPPLIER, "Supplier / manufacturer"),
@@ -32,7 +33,7 @@ class Vendor(AddressMixin, TimeStamped):
         (CARRIER, "Carrier / trucking"),
         (OTHER, "Other"),
     ]
-    code = models.CharField(max_length=20, unique=True)
+    code = models.CharField(max_length=20)
     name = models.CharField(max_length=200)
     vendor_type = models.CharField(max_length=20, choices=TYPES, default=SUPPLIER)
     contact_name = models.CharField(max_length=100, blank=True)
@@ -48,6 +49,7 @@ class Vendor(AddressMixin, TimeStamped):
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        unique_together = ("company", "code")
         ordering = ["name"]
 
     def __str__(self):
@@ -105,6 +107,7 @@ class PurchaseOrder(NumberedMixin, TimeStamped):
                                    editable=False)
 
     class Meta:
+        unique_together = ("company", "number")
         ordering = ["-order_date", "-id"]
 
     def get_absolute_url(self):
@@ -138,7 +141,7 @@ class PurchaseOrder(NumberedMixin, TimeStamped):
         self.save(update_fields=["status"])
 
 
-class PurchaseOrderLine(models.Model):
+class PurchaseOrderLine(TenantModel):
     order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name="lines")
     product = models.ForeignKey("products.Product", on_delete=models.PROTECT, related_name="po_lines")
     warehouse = models.ForeignKey("inventory.Warehouse", on_delete=models.PROTECT, related_name="po_lines",
@@ -280,6 +283,7 @@ class Shipment(NumberedMixin, TimeStamped):
     IN_TRANSIT_STATUSES = (IN_TRANSIT, AT_PORT, CUSTOMS, CLEARED)
 
     class Meta:
+        unique_together = ("company", "number")
         ordering = ["-eta", "-id"]
 
     def get_absolute_url(self):
@@ -315,7 +319,7 @@ class Shipment(NumberedMixin, TimeStamped):
         return PurchaseOrder.objects.filter(lines__shipment_lines__shipment=self).distinct()
 
 
-class ShipmentLine(models.Model):
+class ShipmentLine(TenantModel):
     shipment = models.ForeignKey(Shipment, on_delete=models.CASCADE, related_name="lines")
     po_line = models.ForeignKey(PurchaseOrderLine, on_delete=models.PROTECT, related_name="shipment_lines")
     quantity = models.DecimalField(max_digits=14, decimal_places=3)
@@ -346,7 +350,7 @@ class ShipmentLine(models.Model):
         return self.value_base
 
 
-class LandedCost(models.Model):
+class LandedCost(TenantModel):
     COST_TYPES = [
         ("freight", "Ocean / air freight"),
         ("insurance", "Cargo insurance"),
@@ -379,7 +383,7 @@ class LandedCost(models.Model):
         return self.shipment.get_absolute_url()
 
 
-class ShipmentDocument(models.Model):
+class ShipmentDocument(TenantModel):
     DOC_TYPES = [
         ("commercial_invoice", "Commercial invoice"),
         ("packing_list", "Packing list"),
@@ -419,6 +423,7 @@ class GoodsReceipt(NumberedMixin):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        unique_together = ("company", "number")
         ordering = ["-date", "-id"]
 
     def get_absolute_url(self):
@@ -429,7 +434,7 @@ class GoodsReceipt(NumberedMixin):
         return money(sum((line.total_cost for line in self.lines.all()), ZERO))
 
 
-class GoodsReceiptLine(models.Model):
+class GoodsReceiptLine(TenantModel):
     receipt = models.ForeignKey(GoodsReceipt, on_delete=models.CASCADE, related_name="lines")
     po_line = models.ForeignKey(PurchaseOrderLine, on_delete=models.PROTECT, related_name="receipt_lines")
     product = models.ForeignKey("products.Product", on_delete=models.PROTECT)

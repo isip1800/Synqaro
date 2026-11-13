@@ -2,6 +2,7 @@ import datetime
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.urls import reverse_lazy
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -76,6 +77,7 @@ def account_detail(request, pk):
 
 
 class JournalList(ErpListView):
+    create_url = reverse_lazy("accounting:journalentry_create")
     model = JournalEntry
     title = "Journal Entries"
     columns = (("Entry", "number"), ("Date", "date"), ("Source", "source"), ("Reference", "reference"),
@@ -128,6 +130,7 @@ def journal_reverse(request, pk):
 # ----------------------------------------------------------------------------- Receivables
 
 class InvoiceList(ErpListView):
+    create_url = reverse_lazy("accounting:customerinvoice_create")
     model = CustomerInvoice
     title = "Customer Invoices (Accounts Receivable)"
     columns = (("Invoice", "number"), ("Customer", "customer"), ("Date", "invoice_date"), ("Due", "due_date"),
@@ -169,6 +172,7 @@ class InvoiceDetail(ErpDetailView):
 
 
 class CustomerPaymentList(ErpListView):
+    create_url = reverse_lazy("accounting:customerpayment_create")
     model = CustomerPayment
     title = "Customer Payments"
     columns = (("Receipt", "number"), ("Customer", "customer"), ("Date", "date"), ("Method", "method"),
@@ -206,6 +210,7 @@ class CustomerPaymentDetail(ErpDetailView):
 # ----------------------------------------------------------------------------- Payables
 
 class BillList(ErpListView):
+    create_url = reverse_lazy("accounting:vendorbill_create")
     model = VendorBill
     title = "Vendor Bills (Accounts Payable)"
     columns = (("Bill", "number"), ("Vendor", "vendor"), ("Vendor inv #", "vendor_invoice_number"),
@@ -263,6 +268,7 @@ class BillDetail(ErpDetailView):
 
 
 class VendorPaymentList(ErpListView):
+    create_url = reverse_lazy("accounting:vendorpayment_create")
     model = VendorPayment
     title = "Vendor Payments"
     columns = (("Payment", "number"), ("Vendor", "vendor"), ("Date", "date"), ("Method", "method"),

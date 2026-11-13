@@ -18,8 +18,8 @@
   <div class="kpi"><div class="label">Reserved</div><div class="value">{{ object.qty_reserved|qty }}</div><div class="note">Confirmed orders</div></div>
   <div class="kpi"><div class="label">Available</div><div class="value">{{ object.qty_available|qty }}</div></div>
   <div class="kpi"><div class="label">On order</div><div class="value">{{ object.qty_on_order|qty }}</div><div class="note">Open POs</div></div>
-  <div class="kpi"><div class="label">Avg landed cost</div><div class="value">{{ object.avg_cost|unitcost }}</div><div class="note">Value {{ object.inventory_value|money }}</div></div>
-  <div class="kpi"><div class="label">List price</div><div class="value">{{ object.list_price|money }}</div><div class="note">Margin {{ object.margin_pct|pct }}</div></div>
+{% if can_see_costs %}<div class="kpi"><div class="label">Avg landed cost</div><div class="value">{{ object.avg_cost|unitcost }}</div><div class="note">Value {{ object.inventory_value|money }}</div></div>{% endif %}
+  <div class="kpi"><div class="label">List price</div><div class="value">{{ object.list_price|money }}</div>{% if can_see_costs %}<div class="note">Margin {{ object.margin_pct|pct }}</div>{% endif %}</div>
 </div>
 <div class="tabs" id="tabs">
   <a data-tab="availability">Availability</a><a data-tab="general">General</a><a data-tab="details">Item details</a><a data-tab="packaging">Packaging</a>
@@ -49,8 +49,9 @@
     </dl>{% if object.description %}<p>{{ object.description|linebreaksbr }}</p>{% endif %}</div>
     <div class="card"><h3>Price / cost & replenishment</h3><dl class="dl-grid">
       <div><dt>List price</dt><dd>{{ object.list_price|money }}</dd></div>
+{% if can_see_costs %}
       <div><dt>Standard cost</dt><dd>{{ object.standard_cost|unitcost }}</dd></div>
-      <div><dt>Monthly carrying cost</dt><dd>{{ object.monthly_carrying_cost|unitcost }}</dd></div>
+      <div><dt>Monthly carrying cost</dt><dd>{{ object.monthly_carrying_cost|unitcost }}</dd></div>{% endif %}
       <div><dt>Preferred vendor</dt><dd>{% if object.preferred_vendor %}<a href="{{ object.preferred_vendor.get_absolute_url }}">{{ object.preferred_vendor }}</a>{% else %}—{% endif %}</dd></div>
       <div><dt>Reorder point / qty</dt><dd>{{ object.reorder_point|qty }} / {{ object.reorder_qty|qty }}</dd></div>
       <div><dt>Lead time</dt><dd>{{ object.lead_time_days }} days</dd></div>
@@ -126,10 +127,10 @@
 </section>
 
 <section class="tabpanel" id="tab-vendors">
-  <div class="card table-wrap"><h3>Vendor prices</h3>
+{% if can_see_costs %}  <div class="card table-wrap"><h3>Vendor prices</h3>
     <table class="table compact"><thead><tr><th>Vendor</th><th>Vendor SKU</th><th class="num">Cost</th><th class="num">MOQ</th><th class="num">Lead</th></tr></thead><tbody>
     {% for v in vendor_prices %}<tr><td><a href="{{ v.vendor.get_absolute_url }}">{{ v.vendor }}</a></td><td>{{ v.vendor_sku|default:"—" }}</td><td class="num">{{ v.unit_cost|unitcost }} {{ v.currency }}</td><td class="num">{{ v.moq|qty }}</td><td class="num">{{ v.lead_time_days }}d</td></tr>{% empty %}<tr><td colspan="5" class="empty">No vendor prices.</td></tr>{% endfor %}
-    </tbody></table></div>
+    </tbody></table></div>{% endif %}
   <div class="card table-wrap"><h3>Open purchase orders</h3>
     <table class="table compact"><thead><tr><th>PO</th><th>Vendor</th><th class="num">Open qty</th><th>Expected</th></tr></thead><tbody>
     {% for l in open_po_lines %}<tr><td><a href="{{ l.order.get_absolute_url }}">{{ l.order.number }}</a></td><td>{{ l.order.vendor }}</td><td class="num">{{ l.qty_open|qty }}</td><td>{{ l.order.expected_date|date:"Y-m-d"|default:"—" }}</td></tr>{% empty %}<tr><td colspan="4" class="empty">None.</td></tr>{% endfor %}
@@ -167,8 +168,8 @@
 
 <section class="tabpanel" id="tab-activity">
   <div class="card table-wrap"><h3>Recent stock moves</h3>
-  <table class="table compact"><thead><tr><th>Date</th><th>Type</th><th>Warehouse</th><th>Reference</th><th class="num">Qty</th><th class="num">Unit cost</th></tr></thead><tbody>
-  {% for m in moves %}<tr><td>{{ m.date|date:"Y-m-d" }}</td><td>{{ m.get_move_type_display }}</td><td>{{ m.warehouse.code }}</td><td>{{ m.reference }}</td><td class="num">{{ m.quantity|qty }}</td><td class="num">{{ m.unit_cost|unitcost }}</td></tr>{% empty %}<tr><td colspan="6" class="empty">No movements.</td></tr>{% endfor %}
+  <table class="table compact"><thead><tr><th>Date</th><th>Type</th><th>Warehouse</th><th>Reference</th><th class="num">Qty</th>{% if can_see_costs %}<th class="num">Unit cost</th>{% endif %}</tr></thead><tbody>
+  {% for m in moves %}<tr><td>{{ m.date|date:"Y-m-d" }}</td><td>{{ m.get_move_type_display }}</td><td>{{ m.warehouse.code }}</td><td>{{ m.reference }}</td><td class="num">{{ m.quantity|qty }}</td>{% if can_see_costs %}<td class="num">{{ m.unit_cost|unitcost }}</td>{% endif %}</tr>{% empty %}<tr><td colspan="6" class="empty">No movements.</td></tr>{% endfor %}
   </tbody></table></div>
 </section>
 <script>

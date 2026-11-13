@@ -17,10 +17,10 @@
   </div>
 </div>
 <div class="card table-wrap"><table class="table">
-<thead><tr><th></th><th>Product</th><th>Warehouse</th><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th>{% if fs.any %}<th class="num">FS Cost USD</th><th class="num">FS Cost RMB</th><th class="num">Ext FS Cost USD</th><th class="num">Ext FS Cost RMB</th>{% endif %}<th class="num">On shipments</th><th class="num">Received</th><th class="num">Billed</th></tr></thead><tbody>
-{% for l in lines %}<tr><td>{% with img=l.product.primary_image %}{% if img %}<a href="{% url 'products:image' img.pk %}" target="_blank"><img class="line-thumb" src="{{ img.thumb_url }}" alt="" loading="lazy"></a>{% endif %}{% endwith %}</td><td><a href="{{ l.product.get_absolute_url }}">{{ l.product.sku }}</a></td><td>{{ l.warehouse.code }}</td><td>{{ l.description|default:l.product.name }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{{ l.unit_price|unitcost }}</td><td class="num">{{ l.amount|money }}</td>{% if fs.any %}<td class="num">{{ l.fs_cost_usd|unitcost }}</td><td class="num">{{ l.fs_cost_rmb|unitcost }}</td><td class="num">{{ l.ext_fs_cost_usd|unitcost }}</td><td class="num">{{ l.ext_fs_cost_rmb|unitcost }}</td>{% endif %}<td class="num">{{ l.qty_on_shipments|qty }}</td><td class="num">{{ l.qty_received|qty }}</td><td class="num">{{ l.qty_billed|qty }}</td></tr>{% endfor %}
+<thead><tr><th></th><th>Product</th><th>Warehouse</th><th>Description</th><th class="num">Qty</th>{% if can_see_costs %}<th class="num">Unit price</th><th class="num">Amount</th>{% endif %}{% if fs.any %}<th class="num">FS Cost USD</th><th class="num">FS Cost RMB</th><th class="num">Ext FS Cost USD</th><th class="num">Ext FS Cost RMB</th>{% endif %}<th class="num">On shipments</th><th class="num">Received</th><th class="num">Billed</th></tr></thead><tbody>
+{% for l in lines %}<tr><td>{% with img=l.product.primary_image %}{% if img %}<a href="{% url 'products:image' img.pk %}" target="_blank"><img class="line-thumb" src="{{ img.thumb_url }}" alt="" loading="lazy"></a>{% endif %}{% endwith %}</td><td><a href="{{ l.product.get_absolute_url }}">{{ l.product.sku }}</a></td><td>{{ l.warehouse.code }}</td><td>{{ l.description|default:l.product.name }}</td><td class="num">{{ l.quantity|qty }}</td>{% if can_see_costs %}<td class="num">{{ l.unit_price|unitcost }}</td><td class="num">{{ l.amount|money }}</td>{% endif %}{% if fs.any %}<td class="num">{{ l.fs_cost_usd|unitcost }}</td><td class="num">{{ l.fs_cost_rmb|unitcost }}</td><td class="num">{{ l.ext_fs_cost_usd|unitcost }}</td><td class="num">{{ l.ext_fs_cost_rmb|unitcost }}</td>{% endif %}<td class="num">{{ l.qty_on_shipments|qty }}</td><td class="num">{{ l.qty_received|qty }}</td><td class="num">{{ l.qty_billed|qty }}</td></tr>{% endfor %}
 </tbody>
-<tfoot><tr><td colspan="6">Total {{ object.currency }}</td><td class="num">{{ object.total|money }}</td>{% if fs.any %}<td></td><td></td><td class="num">{{ fs.usd|money }}</td><td class="num">{{ fs.rmb|money }}</td>{% endif %}<td colspan="3">{% if object.currency_id != base %}≈ {{ object.total_base|money }} {{ base }}{% endif %}</td></tr></tfoot>
+{% if can_see_costs %}<tfoot><tr><td colspan="6">Total {{ object.currency }}</td><td class="num">{{ object.total|money }}</td>{% if fs.any %}<td></td><td></td><td class="num">{{ fs.usd|money }}</td><td class="num">{{ fs.rmb|money }}</td>{% endif %}<td colspan="3">{% if object.currency_id != base %}≈ {{ object.total_base|money }} {{ base }}{% endif %}</td></tr></tfoot>{% endif %}
 </table></div>
 <div class="grid-2">
   <div class="card">
@@ -37,7 +37,7 @@
         <button class="btn">Confirm</button></form>
     {% else %}<p class="muted">Not yet sent.</p>{% endif %}
   </div>
-  <div class="card">
+  {% if "accounting.post" in perms %}<div class="card">
     <h3>Bill this PO</h3>
     {% if object.status in 'sent,confirmed,partial,received' %}
     <p class="muted">Creates a draft bill for received-but-unbilled quantities at PO prices.</p>
@@ -46,15 +46,15 @@
       <label class="field"><span>Bill date</span><input type="date" name="bill_date" value="{{ today|date:'Y-m-d' }}"></label>
       <button class="btn">Create draft bill</button></form>
     {% else %}<p class="muted">Available once the PO is sent.</p>{% endif %}
-  </div>
+  </div>{% endif %}
 </div>
 <div class="grid-3">
   <div class="card table-wrap"><h3>Shipments</h3><table class="table compact"><tbody>
   {% for s in shipments %}<tr><td><a href="{{ s.get_absolute_url }}">{{ s.number }}</a></td><td>{% status_badge s %}</td><td>ETA {{ s.eta|date:"Y-m-d"|default:"—" }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div>
   <div class="card table-wrap"><h3>Receipts</h3><table class="table compact"><tbody>
-  {% for r in receipts %}<tr><td><a href="{{ r.get_absolute_url }}">{{ r.number }}</a></td><td>{{ r.date|date:"Y-m-d" }}</td><td class="num">{{ r.total_value|money }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div>
+  {% for r in receipts %}<tr><td><a href="{{ r.get_absolute_url }}">{{ r.number }}</a></td><td>{{ r.date|date:"Y-m-d" }}</td>{% if can_see_costs %}<td class="num">{{ r.total_value|money }}</td>{% endif %}</tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div>
   <div class="card table-wrap"><h3>Bills</h3><table class="table compact"><tbody>
-  {% for b in bills %}<tr><td><a href="{{ b.get_absolute_url }}">{{ b.number }}</a></td><td>{% status_badge b %}</td><td class="num">{{ b.total|money }}</td></tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div>
+  {% for b in bills %}<tr><td><a href="{{ b.get_absolute_url }}">{{ b.number }}</a></td><td>{% status_badge b %}</td>{% if can_see_costs %}<td class="num">{{ b.total|money }}</td>{% endif %}</tr>{% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div>
 </div>
 {% if object.payment_terms or object.notes %}<div class="card"><h3>Terms & notes</h3>{% if object.payment_terms %}<p><strong>Payment terms:</strong> {{ object.payment_terms }}</p>{% endif %}{{ object.notes|linebreaksbr }}</div>{% endif %}
 {% notes_and_files object %}

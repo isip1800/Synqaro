@@ -6,8 +6,8 @@
     {% include "core/_chooser.html" %}
     <a class="btn" href="{% url 'products:product_export' %}?{{ query }}" title="Pictures placed inside the cells — Excel 365 / 2021 or newer">⬇ Excel (pictures in cells)</a>
     <a class="btn" href="{% url 'products:product_export' %}?{{ query }}{% if query %}&{% endif %}images=float" title="Pictures sit over the cells — works in any Excel version">⬇ Excel (any version)</a>
-    <a class="btn" href="{% url 'products:setup' %}">Product setup</a>
-    <a class="btn btn-primary" href="{% url 'products:product_create' %}">+ New item</a>
+    {% if "products.edit" in perms %}<a class="btn" href="{% url 'products:setup' %}">Product setup</a>
+    <a class="btn btn-primary" href="{% url 'products:product_create' %}">+ New item</a>{% endif %}
   </div>
 </div>
 <form class="toolbar" method="get">

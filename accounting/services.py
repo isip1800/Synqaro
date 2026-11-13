@@ -96,7 +96,9 @@ def post_journal(date, memo, lines, source="manual", reference="", user=None):
         return None
     entry = JournalEntry.objects.create(date=date, memo=memo[:255], source=source, reference=reference,
                                         created_by=user)
-    JournalLine.objects.bulk_create([
+    from core.tenancy import stamp
+
+    JournalLine.objects.bulk_create(stamp([
         JournalLine(
             entry=entry,
             account=line["account"],
@@ -105,9 +107,10 @@ def post_journal(date, memo, lines, source="manual", reference="", user=None):
             description=line.get("description", "")[:255],
             customer=line.get("customer"),
             vendor=line.get("vendor"),
+            company_id=entry.company_id,
         )
         for line in clean
-    ])
+    ]))
     return entry
 
 

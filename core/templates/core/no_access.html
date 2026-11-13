@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:640px"><h2>No company access</h2>
+<p>Your login is not a member of any active company yet. Ask your administrator to add you under <strong>Settings → Users &amp; Roles</strong>.</p>
+<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn">Sign out</button></form></div>
+{% endblock %}

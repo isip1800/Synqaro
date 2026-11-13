@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h1>Users &amp; Roles — {{ company.name }}</h1><div class="sub">{{ seats }} active user{{ seats|pluralize }} in this company.</div></div>
+<div class="actions"><a class="btn" href="{% url 'core:role_create' %}">+ Role</a><a class="btn btn-primary" href="{% url 'core:user_create' %}">+ Add user</a></div></div>
+<div class="card table-wrap"><table class="table"><thead><tr><th>Login</th><th>Name</th><th>Email</th><th>Role</th><th>Active</th><th>Last sign-in</th></tr></thead><tbody>
+{% for m in members %}<tr><td><a href="{% url 'core:user_update' m.pk %}">{{ m.user.username }}</a>{% if m.user.is_superuser %} <span class="badge">platform admin</span>{% endif %}</td><td>{{ m.user.get_full_name }}</td><td>{{ m.user.email }}</td><td>{{ m.role }}</td><td>{% if m.is_active %}✓{% else %}—{% endif %}</td><td>{{ m.user.last_login|date:"Y-m-d H:i"|default:"never" }}</td></tr>
+{% empty %}<tr><td colspan="6" class="empty">No users yet.</td></tr>{% endfor %}</tbody></table></div>
+<div class="card table-wrap"><h3>Roles</h3><table class="table compact"><thead><tr><th>Role</th><th>Description</th><th class="num">Users</th><th class="num">Permissions</th></tr></thead><tbody>
+{% for r in roles %}<tr><td><a href="{% url 'core:role_update' r.pk %}">{{ r.name }}</a>{% if r.is_system %} <span class="badge">built-in</span>{% endif %}</td><td class="muted">{{ r.description }}</td><td class="num">{{ r.memberships.count }}</td><td class="num">{{ r.permissions|length }}</td></tr>{% endfor %}
+</tbody></table></div>
+<p class="muted">Vendor portal logins are managed under <a href="{% url 'portal:contact_list' %}">Vendor Portal Users</a>.</p>
+{% endblock %}
