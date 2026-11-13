@@ -5,10 +5,11 @@ from django.db.models import F, Sum
 from django.urls import reverse
 
 from core.models import TimeStamped
+from core.tenancy import TenantModel
 from core.utils import ZERO
 
 
-class LookupValue(models.Model):
+class LookupValue(TenantModel):
     """Values for the item-detail drop-downs (Brand, Season, Material...). Each kind has its own menu."""
 
     KINDS = [
@@ -35,7 +36,7 @@ class LookupValue(models.Model):
     is_active = models.BooleanField(default=True)
 
     class Meta:
-        unique_together = ("kind", "code")
+        unique_together = ("company", "kind", "code")
         ordering = ["kind", "code"]
         verbose_name = "lookup value"
 
@@ -46,7 +47,7 @@ class LookupValue(models.Model):
         return reverse("products:lookup_update", args=[self.kind, self.pk])
 
 
-class ItemClass(models.Model):
+class ItemClass(TenantModel):
     """Three-tier item classification: Tier 1 Class -> Tier 2 Subclass -> Tier 3 Product Type."""
 
     TIERS = [(1, "Tier 1 — Class"), (2, "Tier 2 — Subclass"), (3, "Tier 3 — Product Type")]
@@ -60,7 +61,7 @@ class ItemClass(models.Model):
     is_active = models.BooleanField(default=True)
 
     class Meta:
-        unique_together = ("parent", "code")
+        unique_together = ("company", "parent", "code")
         ordering = ["level", "code"]
         verbose_name = "item class"
         verbose_name_plural = "item classes"
@@ -100,7 +101,7 @@ class ItemClass(models.Model):
         return chain[n - 1] if len(chain) >= n else None
 
 
-class HTSCode(models.Model):
+class HTSCode(TenantModel):
     """HTS code, duty and tariff for an item class + material (+ gender) combination."""
 
     item_class = models.ForeignKey(ItemClass, on_delete=models.CASCADE, related_name="hts_codes",
@@ -149,11 +150,12 @@ class HTSCode(models.Model):
                                                        tariff_rate=self.tariff_rate)
 
 
-class UnitOfMeasure(models.Model):
-    code = models.CharField(max_length=10, unique=True)
+class UnitOfMeasure(TenantModel):
+    code = models.CharField(max_length=10)
     name = models.CharField(max_length=50)
 
     class Meta:
+        unique_together = ("company", "code")
         ordering = ["code"]
         verbose_name = "unit of measure"
 
@@ -164,8 +166,8 @@ class UnitOfMeasure(models.Model):
         return reverse("products:unitofmeasure_update", args=[self.pk])
 
 
-class Product(TimeStamped):
-    sku = models.CharField("SKU", max_length=50, unique=True)
+class Product(TenantModel, TimeStamped):
+    sku = models.CharField("SKU", max_length=50)
     style_number = models.CharField("Style #", max_length=50, blank=True, db_index=True,
                                     help_text="Style the item belongs to (several SKUs can share a style)")
     name = models.CharField(max_length=200)
@@ -239,6 +241,7 @@ class Product(TimeStamped):
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        unique_together = ("company", "sku")
         ordering = ["sku"]
 
     def __str__(self):
@@ -354,7 +357,7 @@ class Product(TimeStamped):
         return (self.list_price - self.avg_cost) / self.list_price * 100
 
 
-class ProductImage(models.Model):
+class ProductImage(TenantModel):
     """Item photo. Stored in the database so it survives redeploys (no persistent disk needed)."""
 
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="images")
@@ -381,7 +384,7 @@ class ProductImage(models.Model):
         return reverse("products:image_thumb", args=[self.pk])
 
 
-class ProductCrossReference(models.Model):
+class ProductCrossReference(TenantModel):
     """Alternate identifiers: barcodes / UPCs, vendor part numbers, customer part numbers."""
 
     BARCODE, VENDOR, CUSTOMER, GLOBAL = "barcode", "vendor", "customer", "global"
@@ -419,7 +422,7 @@ class ProductCrossReference(models.Model):
                 raise ValidationError({"alternate_id": f"Barcode already used on {dup.product.sku}."})
 
 
-class ProductWarehouse(models.Model):
+class ProductWarehouse(TenantModel):
     """Per-warehouse stocking settings for an item."""
 
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="warehouse_settings")
@@ -444,7 +447,7 @@ class ProductWarehouse(models.Model):
         return q.quantity if q else ZERO
 
 
-class VendorProduct(models.Model):
+class VendorProduct(TenantModel):
     vendor = models.ForeignKey("purchasing.Vendor", on_delete=models.CASCADE, related_name="vendor_products")
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="vendor_products")
     vendor_sku = models.CharField("Vendor SKU", max_length=50, blank=True)
@@ -465,7 +468,7 @@ class VendorProduct(models.Model):
         return reverse("products:vendorproduct_update", args=[self.pk])
 
 
-class PriceList(models.Model):
+class PriceList(TenantModel):
     name = models.CharField(max_length=100)
     description = models.CharField(max_length=255, blank=True)
     is_active = models.BooleanField(default=True)
@@ -480,7 +483,7 @@ class PriceList(models.Model):
         return reverse("products:pricelist_detail", args=[self.pk])
 
 
-class PriceListItem(models.Model):
+class PriceListItem(TenantModel):
     price_list = models.ForeignKey(PriceList, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="price_list_items")
     min_qty = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal("1"))

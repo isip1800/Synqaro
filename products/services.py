@@ -131,7 +131,7 @@ def _lv(v):
     return str(v) if v else ""
 
 
-def export_products_xlsx(products, image_mode="cell"):
+def export_products_xlsx(products, image_mode="cell", include_costs=True):
     """Product list as .xlsx with each item's main image in the first column.
 
     image_mode="cell":  picture placed *in* the cell (Excel 365 / 2021+ "Place in Cell").
@@ -157,6 +157,9 @@ def export_products_xlsx(products, image_mode="cell"):
     ] + [(f"Qty per {label}", 11, intf) for label, _ in company.containers] + [
         ("UPC", 15, cell), ("On Hand", 10, intf), ("Avg Landed Cost", 12, num4), ("List Price", 10, num),
     ]
+    cost_cols = {"Avg Landed Cost"}
+    keep = [i for i, c in enumerate(columns) if include_costs or c[0] not in cost_cols]
+    columns = [columns[i] for i in keep]
     for c, (title, width, _) in enumerate(columns):
         ws.write(0, c, title, head)
         ws.set_column(c, c, width)
@@ -189,6 +192,7 @@ def export_products_xlsx(products, image_mode="cell"):
             p.barcode, float(getattr(p, "export_on_hand", None) if hasattr(p, "export_on_hand") else p.qty_on_hand),
             float(p.avg_cost), float(p.list_price),
         ]
+        values = [values[i - 1] for i in keep[1:]]
         for c, v in enumerate(values, start=1):
             ws.write(r, c, v, columns[c][2])
     ws.autofilter(0, 0, max(len(products), 1), len(columns) - 1)

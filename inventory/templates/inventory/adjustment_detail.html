@@ -7,7 +7,7 @@
     <form method="post" action="{% url 'inventory:adjustment_post' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Post adjustment</button></form>{% endif %}</div>
 </div>
 <div class="card table-wrap"><table class="table"><thead><tr><th>Product</th><th class="num">Qty change</th><th class="num">Unit cost</th></tr></thead><tbody>
-{% for l in object.lines.all %}<tr><td>{{ l.product }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{% if l.unit_cost is not None %}{{ l.unit_cost|unitcost }}{% else %}avg cost{% endif %}</td></tr>{% empty %}<tr><td colspan="3" class="empty">No lines.</td></tr>{% endfor %}
+{% for l in object.lines.all %}<tr><td>{{ l.product }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num">{% if can_see_costs %}{% if l.unit_cost is not None %}{{ l.unit_cost|unitcost }}{% else %}avg cost{% endif %}{% endif %}</td></tr>{% empty %}<tr><td colspan="3" class="empty">No lines.</td></tr>{% endfor %}
 </tbody></table></div>
 {% if object.notes %}<div class="card"><h3>Notes</h3>{{ object.notes|linebreaksbr }}</div>{% endif %}
 {% endblock %}

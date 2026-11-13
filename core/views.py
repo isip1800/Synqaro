@@ -2,7 +2,8 @@ import datetime
 
 from django.contrib import messages
 from django.db.models import F, Sum
-from django.shortcuts import redirect, render
+from django.db import transaction
+from django.shortcuts import get_object_or_404, redirect, render
 
 from core.utils import ZERO
 
@@ -215,3 +216,181 @@ class EmailLogList(ErpListView):
                ("Status", "status"), ("By", "sent_by"), ("Error", "error"))
     search_fields = ("document", "to", "subject")
     create_url = None
+
+
+# ----------------------------------------------------------------------------- companies, users & roles
+
+def _member_companies(user):
+    from .models import Membership
+
+    if user.is_superuser:
+        return Company.objects.filter(is_active=True)
+    return Company.objects.filter(memberships__user=user, memberships__is_active=True, is_active=True)
+
+
+@internal_required
+def switch_company(request):
+    if request.method == "POST":
+        cid = int(request.POST.get("company_id") or 0)
+        if _member_companies(request.user).filter(pk=cid).exists():
+            request.session["company_id"] = cid
+            Company.clear_cache()
+            messages.success(request, f"Now working in {Company.objects.get(pk=cid).name}.")
+        else:
+            messages.error(request, "You are not a member of that company.")
+    return redirect("dashboard")
+
+
+def _is_owner_somewhere(user):
+    from .models import Membership
+
+    return user.is_superuser or Membership.objects.filter(user=user, role__name="Owner", is_active=True).exists()
+
+
+@internal_required
+def company_list(request):
+    from django import forms
+
+    from .models import Membership
+
+    class NewCompanyForm(forms.Form):
+        name = forms.CharField(max_length=200)
+        base_currency = forms.ModelChoiceField(queryset=Currency.objects.all(), initial="USD")
+        copy_setup = forms.BooleanField(required=False, initial=True,
+                                        label="Copy item classes, item details and HTS codes from the current company")
+
+    can_create = _is_owner_somewhere(request.user)
+    form = NewCompanyForm(request.POST or None)
+    if request.method == "POST":
+        if not can_create:
+            messages.error(request, "Only company owners can create companies.")
+        elif form.is_valid():
+            from .services import create_company
+
+            new = create_company(form.cleaned_data["name"], form.cleaned_data["base_currency"].code, request.user,
+                                 copy_setup_from=request.company if form.cleaned_data["copy_setup"] else None)
+            request.session["company_id"] = new.pk
+            messages.success(request, f"Company {new.name} created — you are its owner and now working in it.")
+            return redirect("core:company")
+    rows = []
+    for c in _member_companies(request.user).order_by("name"):
+        m = Membership.objects.filter(user=request.user, company=c).select_related("role").first()
+        rows.append({"company": c, "role": m.role.name if m else ("Platform admin" if request.user.is_superuser
+                                                                  else ""),
+                     "seats": c.memberships.filter(is_active=True).count(), "current": c.pk == request.company.pk})
+    return render(request, "core/company_list.html", {"title": "Companies", "rows": rows, "form": form,
+                                                      "can_create": can_create})
+
+
+@internal_required
+def user_list(request):
+    from .models import Membership, Role
+    from .permissions import ensure_roles
+
+    ensure_roles(request.company)
+    members = Membership.objects.filter(company=request.company).select_related("user", "role")
+    return render(request, "core/user_list.html", {
+        "title": "Users & Roles", "members": members, "roles": Role.objects.filter(company=request.company)
+        .prefetch_related("memberships"), "seats": members.filter(is_active=True).count()})
+
+
+@internal_required
+def user_form(request, pk=None):
+    from django import forms
+    from django.contrib.auth import get_user_model
+
+    from .models import Membership, Role
+
+    User = get_user_model()
+    membership = get_object_or_404(Membership, pk=pk, company=request.company) if pk else None
+    roles = Role.objects.filter(company=request.company)
+
+    class MemberForm(forms.Form):
+        username = forms.CharField(max_length=150, help_text="Existing login (adds them to this company) or a "
+                                                            "new one")
+        first_name = forms.CharField(max_length=150, required=False)
+        last_name = forms.CharField(max_length=150, required=False)
+        email = forms.EmailField(required=False)
+        role = forms.ModelChoiceField(queryset=roles)
+        password = forms.CharField(widget=forms.PasswordInput, required=False, min_length=8,
+                                   help_text="Required for a new login; leave blank to keep the current password")
+        is_active = forms.BooleanField(required=False, initial=True, label="Active in this company")
+
+    initial = {}
+    if membership:
+        u = membership.user
+        initial = {"username": u.username, "first_name": u.first_name, "last_name": u.last_name, "email": u.email,
+                   "role": membership.role_id, "is_active": membership.is_active}
+    form = MemberForm(request.POST or None, initial=initial)
+    if membership:
+        form.fields["username"].disabled = True
+    if request.method == "POST" and form.is_valid():
+        cd = form.cleaned_data
+        with transaction.atomic():
+            user = membership.user if membership else User.objects.filter(username=cd["username"]).first()
+            if user is None:
+                if not cd["password"]:
+                    form.add_error("password", "Set a password for the new login.")
+                    return render(request, "core/form.html", {"form": form, "title": "Add user"})
+                user = User.objects.create_user(cd["username"], email=cd["email"], password=cd["password"])
+            elif hasattr(user, "vendor_contact"):
+                form.add_error("username", "That login is a vendor-portal user.")
+                return render(request, "core/form.html", {"form": form, "title": "Add user"})
+            if cd["first_name"] or cd["last_name"] or cd["email"]:
+                user.first_name, user.last_name = cd["first_name"], cd["last_name"]
+                user.email = cd["email"] or user.email
+            if cd["password"] and (membership or not user.has_usable_password()):
+                user.set_password(cd["password"])
+            user.save()
+            m, _ = Membership.objects.update_or_create(user=user, company=request.company,
+                                                       defaults={"role": cd["role"], "is_active": cd["is_active"]})
+            owners = Membership.objects.filter(company=request.company, role__name="Owner", is_active=True)
+            if not owners.exists():
+                raise_error = "The company must keep at least one active Owner."
+                transaction.set_rollback(True)
+                messages.error(request, raise_error)
+                return redirect("core:user_list")
+        messages.success(request, f"{user.username} — {m.role} in {request.company.name}.")
+        return redirect("core:user_list")
+    return render(request, "core/form.html", {"form": form, "title": f"Edit {membership.user}" if membership
+                                              else "Add user", "cancel_url": "/settings/users/"})
+
+
+@internal_required
+def role_form(request, pk=None):
+    from .models import Role
+    from .permissions import PERMISSIONS
+
+    role = get_object_or_404(Role, pk=pk, company=request.company) if pk else None
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()[:60]
+        perms = [p for p in request.POST.getlist("perm") if p in dict((x[0], 1) for x in PERMISSIONS)]
+        if request.POST.get("delete") and role:
+            if role.is_system or role.memberships.exists():
+                messages.error(request, "Built-in roles and roles in use cannot be deleted.")
+            else:
+                role.delete()
+                messages.success(request, "Role deleted.")
+            return redirect("core:user_list")
+        if not name:
+            messages.error(request, "Give the role a name.")
+        elif Role.objects.filter(company=request.company, name__iexact=name).exclude(pk=getattr(role, "pk", None)) \
+                .exists():
+            messages.error(request, "A role with that name exists.")
+        else:
+            if role and role.name == "Owner" and "users.manage" not in perms:
+                perms.append("users.manage")  # owners can always manage users
+            if role is None:
+                role = Role.objects.create(company=request.company, name=name, permissions=perms,
+                                           description=request.POST.get("description", "")[:255])
+            else:
+                role.name, role.permissions = name, perms
+                role.description = request.POST.get("description", "")[:255]
+                role.save()
+            messages.success(request, f"Role {role.name} saved.")
+            return redirect("core:user_list")
+    groups = {}
+    for code, group, label in PERMISSIONS:
+        groups.setdefault(group, []).append((code, label, role is not None and code in role.permissions))
+    return render(request, "core/role_form.html", {"title": f"Role: {role.name}" if role else "New role",
+                                                   "role": role, "groups": groups.items()})

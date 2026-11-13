@@ -43,6 +43,16 @@ class Fixture:
             send_po(po)
         return po
 
+    def member(self, username, role="Administrator", company=None, password="pw-test-1234"):
+        """Create a login that is a member of `company` (default: the first company) with a built-in role."""
+        from core.models import Membership
+        from core.permissions import ensure_roles
+
+        company = company or Company.get_default()
+        user = get_user_model().objects.create_user(username, password=password)
+        Membership.objects.create(user=user, company=company, role=ensure_roles(company)[role])
+        return user
+
     @staticmethod
     def balance(key):
         return acct(key).balance()

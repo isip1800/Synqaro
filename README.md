@@ -25,6 +25,13 @@ For a clean start without demo data, run `python manage.py setup_erp --admin <us
 
 Run the tests with `python manage.py test`.
 
+## Companies, users and roles
+
+- **Multiple companies per login.** Every company has its own items, customers, vendors, orders, inventory, books, settings and numbering, and every record carries its company. Queries are automatically limited to the current company (`core/tenancy.py`), so one company's data never shows in another. Switch companies with the menu in the top bar. Owners create new companies under **Settings → Companies**, optionally copying item classes, item details and HTS codes.
+- **Users & Roles** (Settings): a login becomes a **member** of a company with a **role**. Built-in roles are Owner, Administrator, Accounting, Sales, Sales Manager, Purchasing, Warehouse and Read Only, and custom roles can be added. Permissions cover each module's view and edit rights, plus approvals, shipping, receiving, posting, period close, settings and users.
+- **"See costs"** is its own permission. Without it, landed costs, average cost, inventory value, margins, PO prices and First Sale costs are hidden on screens, in exports and in prints.
+- Active memberships are the per-user "seats" a subscription would bill for.
+
 ## Modules
 
 ### Sales

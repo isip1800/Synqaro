@@ -7,12 +7,12 @@
 <div class="kpis">
   <div class="kpi"><div class="label">Sales this month</div><div class="value">{{ mtd_revenue|money }}</div><div class="note">Target {{ object.monthly_target|money }}</div></div>
   <div class="kpi"><div class="label">Target attainment</div><div class="value">{{ attainment|pct }}</div><div class="bar" style="margin-top:8px"><span style="width:{% if attainment and attainment < 100 %}{{ attainment|floatformat:0 }}{% else %}100{% endif %}%"></span></div></div>
-  <div class="kpi"><div class="label">Margin this month</div><div class="value">{{ mtd_margin|money }}</div></div>
-  <div class="kpi"><div class="label">Sales YTD</div><div class="value">{{ ytd_revenue|money }}</div><div class="note">Margin {{ ytd_margin|money }}</div></div>
+  {% if can_see_costs %}<div class="kpi"><div class="label">Margin this month</div><div class="value">{{ mtd_margin|money }}</div></div>{% endif %}
+  <div class="kpi"><div class="label">Sales YTD</div><div class="value">{{ ytd_revenue|money }}</div>{% if can_see_costs %}<div class="note">Margin {{ ytd_margin|money }}</div>{% endif %}</div>
   <div class="kpi"><div class="label">Commission owed</div><div class="value">{{ object.commission_outstanding|money }}</div></div>
 </div>
-<div class="card table-wrap"><h3>Last 6 months</h3><table class="table compact"><thead><tr><th>Month</th><th class="num">Invoices</th><th class="num">Revenue</th><th class="num">Margin</th><th>Target attainment</th></tr></thead><tbody>
-{% for h in history %}<tr><td>{{ h.label }}</td><td class="num">{{ h.count }}</td><td class="num">{{ h.revenue|money }}</td><td class="num">{{ h.margin|money }}</td><td><div style="display:flex;gap:8px;align-items:center"><div class="bar" style="flex:1"><span style="width:{{ h.bar|floatformat:0 }}%"></span></div><span class="muted" style="min-width:52px;text-align:right">{{ h.pct|pct }}</span></div></td></tr>{% endfor %}
+<div class="card table-wrap"><h3>Last 6 months</h3><table class="table compact"><thead><tr><th>Month</th><th class="num">Invoices</th><th class="num">Revenue</th>{% if can_see_costs %}<th class="num">Margin</th>{% endif %}<th>Target attainment</th></tr></thead><tbody>
+{% for h in history %}<tr><td>{{ h.label }}</td><td class="num">{{ h.count }}</td><td class="num">{{ h.revenue|money }}</td>{% if can_see_costs %}<td class="num">{{ h.margin|money }}</td>{% endif %}<td><div style="display:flex;gap:8px;align-items:center"><div class="bar" style="flex:1"><span style="width:{{ h.bar|floatformat:0 }}%"></span></div><span class="muted" style="min-width:52px;text-align:right">{{ h.pct|pct }}</span></div></td></tr>{% endfor %}
 </tbody></table></div>
 <div class="card table-wrap"><h3>Unpaid commissions</h3>
 {% if unpaid_commissions %}

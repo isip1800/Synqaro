@@ -13,15 +13,17 @@
       <form method="post" action="{% url 'purchasing:shipment_receive' object.pk %}" class="inline-form" onsubmit="return confirm('Receive all goods and capitalize landed costs?')">{% csrf_token %}
         <input type="date" name="date" value="{{ today|date:'Y-m-d' }}" style="width:auto"><button class="btn btn-primary">Receive into warehouse</button></form>
     {% endif %}
-    <a class="btn" href="{% url 'accounting:vendorbill_create' %}?shipment={{ object.pk }}{% if object.forwarder %}&vendor={{ object.forwarder.pk }}{% endif %}">+ Freight / duty bill</a>
+    {% if "accounting.post" in perms %}<a class="btn" href="{% url 'accounting:vendorbill_create' %}?shipment={{ object.pk }}{% if object.forwarder %}&vendor={{ object.forwarder.pk }}{% endif %}">+ Freight / duty bill</a>{% endif %}
   </div>
 </div>
 {% if not object.approved and object.status != 'received' and object.status != 'cancelled' %}<div class="msg msg-warning">{% if object.created_via_portal %}The vendor submitted this shipping notice through the portal.{% else %}This booking is not approved.{% endif %} Review the goods and quantities below and click <strong>Approve booking</strong>.</div>{% elif object.approved and object.approved_at %}<p class="muted">Approved {{ object.approved_at|date:"Y-m-d H:i" }}{% if object.approved_by %} by {{ object.approved_by }}{% endif %}.</p>{% endif %}
 <div class="card"><div class="timeline">{% for t in timeline %}<div class="step {% if t.done %}done{% endif %} {% if t.current %}current{% endif %}">{{ t.label }}</div>{% endfor %}</div></div>
 <div class="kpis">
+{% if can_see_costs %}
   <div class="kpi"><div class="label">Goods value (base)</div><div class="value">{{ object.goods_value_base|money }}</div></div>
   <div class="kpi"><div class="label">Landed costs</div><div class="value">{{ object.landed_cost_total|money }}</div><div class="note">{{ object.landed_cost_pct|pct }} of goods</div></div>
   <div class="kpi"><div class="label">Total landed value</div><div class="value">{{ object.total_landed_value|money }}</div></div>
+{% endif %}
   <div class="kpi"><div class="label">Weight / volume</div><div class="value" style="font-size:17px">{{ object.total_weight|qty }} kg</div><div class="note">{{ object.total_volume|qty }} m³</div></div>
 </div>
 <div class="grid-2">
@@ -42,14 +44,18 @@
     <div><dt>Received</dt><dd>{{ object.received_on|date:"Y-m-d"|default:"—" }}</dd></div>
   </dl></div>
 </div>
-<div class="card table-wrap"><h3>Goods & landed cost allocation ({{ object.get_allocation_method_display|lower }})</h3>
+{% if can_see_costs %}<div class="card table-wrap"><h3>Goods & landed cost allocation ({{ object.get_allocation_method_display|lower }})</h3>
 <table class="table"><thead><tr><th>PO</th><th>Receive into</th><th>Product</th><th>HS</th><th class="num">Qty</th><th class="num">Cartons</th><th class="num">Goods value</th><th class="num" title="First Sale value where the PO line has an FS cost">Dutiable value</th><th class="num">Landed cost</th><th class="num">Unit goods</th><th class="num">Unit landed</th><th class="num">Unit total</th></tr></thead><tbody>
 {% for r in rows %}<tr><td><a href="{{ r.line.po_line.order.get_absolute_url }}">{{ r.line.po_line.order.number }}</a></td><td>{{ r.line.po_line.warehouse.code }}</td><td>{{ r.line.po_line.product }}</td><td>{{ r.line.po_line.product.hs_code|default:"—" }}</td><td class="num">{{ r.line.quantity|qty }}</td><td class="num">{{ r.line.cartons|default:"—" }}</td><td class="num">{{ r.value|money }}</td><td class="num">{{ r.line.dutiable_value|money }}{% if r.line.po_line.fs_cost_usd %} <span class="badge">FS</span>{% endif %}</td><td class="num">{{ r.landed|money }}</td><td class="num">{{ r.unit_goods|unitcost }}</td><td class="num">{{ r.unit_landed|unitcost }}</td><td class="num"><strong>{{ r.unit_total|unitcost }}</strong></td></tr>
 {% empty %}<tr><td colspan="12" class="empty">No goods on this shipment — edit it to add PO lines.</td></tr>{% endfor %}
 </tbody></table>
 {% if object.status != 'received' %}<p class="muted" style="padding:0 16px 12px">Preview: landed costs are allocated and capitalized into inventory when the shipment is received.</p>{% endif %}
 </div>
+{% else %}<div class="card table-wrap"><h3>Goods</h3><table class="table"><thead><tr><th>PO</th><th>Receive into</th><th>Product</th><th>HS</th><th class="num">Qty</th><th class="num">Cartons</th></tr></thead><tbody>
+{% for r in rows %}<tr><td>{{ r.line.po_line.order.number }}</td><td>{{ r.line.po_line.warehouse.code }}</td><td>{{ r.line.po_line.product }}</td><td>{{ r.line.po_line.product.hs_code|default:"—" }}</td><td class="num">{{ r.line.quantity|qty }}</td><td class="num">{{ r.line.cartons|default:"—" }}</td></tr>
+{% empty %}<tr><td colspan="6" class="empty">No goods on this shipment.</td></tr>{% endfor %}</tbody></table></div>{% endif %}
 <div class="grid-2">
+{% if can_see_costs %}
   <div class="card table-wrap"><h3>Landed costs</h3>
     <table class="table compact"><thead><tr><th>Type</th><th>Description</th><th>Billed by</th><th class="num">Amount</th><th></th></tr></thead><tbody>
     {% for lc in object.landed_costs.all %}<tr><td>{{ lc.get_cost_type_display }}</td><td>{{ lc.description }}</td><td>{{ lc.vendor|default:"—" }}</td><td class="num">{{ lc.amount|money }}</td><td>
@@ -62,6 +68,7 @@
       {% for field in landed_form %}<label class="field"><span>{{ field.label }}</span>{{ field }}</label>{% endfor %}
       <button class="btn">Add cost</button></form>
   </div>
+{% endif %}
   <div class="card table-wrap"><h3>Documents</h3>
     <table class="table compact"><tbody>
     {% for doc in object.documents.all %}<tr><td>{{ doc.get_doc_type_display }}</td><td><a href="{{ doc.file.url }}" target="_blank">{{ doc.description|default:doc.file.name }}</a></td><td class="muted">{{ doc.uploaded_by|default:"" }} · {{ doc.uploaded_at|date:"Y-m-d" }}</td></tr>
@@ -73,7 +80,7 @@
   </div>
 </div>
 {% if object.bills.exists %}<div class="card table-wrap"><h3>Related bills</h3><table class="table compact"><tbody>
-{% for b in object.bills.all %}<tr><td><a href="{{ b.get_absolute_url }}">{{ b.number }}</a></td><td>{{ b.vendor }}</td><td>{{ b.vendor_invoice_number }}</td><td>{% status_badge b %}</td><td class="num">{{ b.total|money }} {{ b.currency }}</td></tr>{% endfor %}
+{% for b in object.bills.all %}<tr><td><a href="{{ b.get_absolute_url }}">{{ b.number }}</a></td><td>{{ b.vendor }}</td><td>{{ b.vendor_invoice_number }}</td><td>{% status_badge b %}</td>{% if can_see_costs %}<td class="num">{{ b.total|money }} {{ b.currency }}</td>{% endif %}</tr>{% endfor %}
 </tbody></table></div>{% endif %}
 {% if object.notes %}<div class="card"><h3>Notes</h3>{{ object.notes|linebreaksbr }}</div>{% endif %}
 {% endblock %}

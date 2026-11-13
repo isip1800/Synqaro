@@ -8,6 +8,13 @@ app_name = "core"
 
 urlpatterns = [
     path("company/", views.company, name="company"),
+    path("switch-company/", views.switch_company, name="switch_company"),
+    path("companies/", views.company_list, name="company_list"),
+    path("users/", views.user_list, name="user_list"),
+    path("users/new/", views.user_form, name="user_create"),
+    path("users/<int:pk>/edit/", views.user_form, name="user_update"),
+    path("roles/new/", views.role_form, name="role_create"),
+    path("roles/<int:pk>/edit/", views.role_form, name="role_update"),
     path("columns/", views.columns_save, name="columns_save"),
     path("docs/<int:ct_id>/<int:obj_id>/files/upload/", documents.file_upload, name="file_upload"),
     path("docs/files/<int:pk>/", documents.file_download, name="file_download"),

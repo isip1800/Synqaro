@@ -1,7 +1,7 @@
 """Small generic CRUD layer used by every module for master data and documents."""
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import path, reverse
@@ -16,6 +16,7 @@ class ErpListView(InternalRequiredMixin, ListView):
     paginate_by = 50
     columns = ()  # default visible columns: sequence of (label, accessor)
     available_columns = None  # optional larger set the user can choose from (column chooser)
+    cost_columns = ()  # accessors only shown to users with the costs.view permission
     screen_key = None
     search_fields = ()
     filters = ()  # sequence of (param, label, choices) applied as exact filters
@@ -48,6 +49,9 @@ class ErpListView(InternalRequiredMixin, ListView):
         from .columns import chooser_context, chosen_columns
 
         available = list(self.available_columns or self.columns)
+        if self.cost_columns and "costs.view" not in getattr(self.request, "perms", ()):
+            available = [c for c in available if c[1] not in self.cost_columns]
+            self.columns = [c for c in self.columns if c[1] not in self.cost_columns]
         if available:
             screen = self.screen_key or f"list:{meta.app_label}.{meta.model_name}"
             keys = chosen_columns(self.request, screen, [a for _, a in available], [a for _, a in self.columns])
@@ -56,10 +60,20 @@ class ErpListView(InternalRequiredMixin, ListView):
             ctx.update(chooser_context(self.request, screen, [(a, label) for label, a in available], keys))
         else:
             columns = self.columns
+        create_url = str(self.create_url) if self.create_url else None
+        if create_url:
+            from django.urls import resolve
+
+            from .permissions import required_permission
+
+            match = resolve(create_url)
+            need = required_permission(match.namespace, match.url_name or "", "POST")
+            if need and need not in getattr(self.request, "perms", ()):
+                create_url = None
         ctx.update(
             title=self.title or meta.verbose_name_plural.title(),
             columns=columns,
-            create_url=self.create_url,
+            create_url=create_url,
             search_enabled=bool(self.search_fields),
             q=self.request.GET.get("q", ""),
             filters=[
@@ -123,6 +137,9 @@ class ErpFormMixin(InternalRequiredMixin):
                 self.after_save(form)
         except ValidationError as exc:
             form.add_error(None, exc)
+            return self.render_to_response(self.get_context_data(form=form, formset=formset))
+        except IntegrityError:
+            form.add_error(None, "That code / number is already used in this company.")
             return self.render_to_response(self.get_context_data(form=form, formset=formset))
         messages.success(self.request, f"{self.model._meta.verbose_name.title()} {self.object} saved.")
         return redirect(self.get_success_url())

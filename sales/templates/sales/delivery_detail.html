@@ -6,6 +6,6 @@
   <div class="card"><h3>Shipping</h3>Carrier: {{ object.carrier|default:"—" }}<br>Tracking: {{ object.tracking_number|default:"—" }}<br>Customer PO: {{ object.order.customer_po|default:"—" }}</div>
 </div>
 <div class="card table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Description</th><th class="num">Qty</th><th class="num no-print">Unit cost</th></tr></thead><tbody>
-{% for l in object.lines.all %}<tr><td>{{ l.so_line.product.sku }}</td><td>{{ l.so_line.description|default:l.so_line.product.name }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num no-print">{{ l.unit_cost|unitcost }}</td></tr>{% endfor %}
+{% for l in object.lines.all %}<tr><td>{{ l.so_line.product.sku }}</td><td>{{ l.so_line.description|default:l.so_line.product.name }}</td><td class="num">{{ l.quantity|qty }}</td><td class="num no-print">{% if can_see_costs %}{{ l.unit_cost|unitcost }}{% endif %}</td></tr>{% endfor %}
 </tbody></table></div>
 {% endblock %}

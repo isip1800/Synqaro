@@ -117,6 +117,10 @@ class Command(BaseCommand):
                                          .quantize(D("0.01")))
 
         maria_user = User.objects.create_user("maria", password="demo12345", first_name="Maria", last_name="Lopez")
+        from core.models import Membership, Role
+
+        Membership.objects.create(user=maria_user, company=company, role=Role.objects.get(company=company,
+                                                                                           name="Sales"))
         maria = SalesRep.objects.create(user=maria_user, code="SR-01", name="Maria Lopez", territory="West Coast",
                                         commission_rate=D("5"), monthly_target=D("25000"), hire_date=ago(700))
         james = SalesRep.objects.create(code="SR-02", name="James Carter", territory="Texas & South",

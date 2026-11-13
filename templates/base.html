@@ -27,8 +27,10 @@
     <header class="topbar">
       <button class="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')" aria-label="Menu">☰</button>
       <div class="topbar-title">{% block heading %}{{ title }}{% endblock %}</div>
+      {% if my_companies|length > 1 %}<form method="post" action="{% url 'core:switch_company' %}" class="company-switch">{% csrf_token %}
+        <select name="company_id" onchange="this.form.submit()" aria-label="Company">{% for c in my_companies %}<option value="{{ c.pk }}" {% if c.pk == company.pk %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></form>{% endif %}
       <div class="topbar-user">
-        {{ user.get_full_name|default:user.username }}
+        {{ user.get_full_name|default:user.username }}{% if membership %} · {{ membership.role }}{% endif %}
         {% if user.is_superuser %}· <a href="{% url 'admin:index' %}">Admin</a>{% endif %}
         · <form method="post" action="{% url 'logout' %}" class="inline">{% csrf_token %}<button class="link">Sign out</button></form>
       </div>

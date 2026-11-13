@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:640px"><h2>You don't have access to this</h2>
+<p>This needs the permission <strong>{{ label }}</strong> (<code>{{ perm }}</code>), which your role in <strong>{{ company.name }}</strong> doesn't include.</p>
+<p class="muted">An administrator can change roles under Settings → Users &amp; Roles.</p>
+<a class="btn" href="{% url 'dashboard' %}">Back to dashboard</a></div>
+{% endblock %}

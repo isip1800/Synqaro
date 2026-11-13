@@ -108,6 +108,7 @@ class MoveList(ErpListView):
     title = "Stock Moves"
     columns = (("Date", "date"), ("Product", "product"), ("Warehouse", "warehouse"), ("Type", "move_type"),
                ("Reference", "reference"), ("Qty", "quantity"), ("Unit cost", "unit_cost"))
+    cost_columns = ("unit_cost",)
     search_fields = ("product__sku", "product__name", "reference")
     select_related = ("product", "warehouse")
     paginate_by = 100

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><h1>{{ title }}</h1></div>
+<form method="post" class="card form-card" style="max-width:900px">{% csrf_token %}
+  <div class="form-grid"><label class="field"><span>Name *</span><input name="name" value="{{ role.name|default:'' }}" required></label>
+  <label class="field field-wide"><span>Description</span><input name="description" value="{{ role.description|default:'' }}"></label></div>
+  {% for group, items in groups %}<h3>{{ group }}</h3><div class="check-list" style="margin-bottom:12px">{% for code, label, on in items %}<label><input type="checkbox" name="perm" value="{{ code }}" {% if on %}checked{% endif %}> {{ label }} <span class="muted">({{ code }})</span></label>{% endfor %}</div>{% endfor %}
+  <div class="form-actions"><button class="btn btn-primary">Save role</button><a class="btn" href="{% url 'core:user_list' %}">Cancel</a>
+  {% if role and not role.is_system %}<button class="btn btn-danger" name="delete" value="1" onclick="return confirm('Delete this role?')">Delete</button>{% endif %}</div>
+</form>
+{% endblock %}

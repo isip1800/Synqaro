@@ -79,6 +79,15 @@ DEFAULT_PRODUCT_COLUMNS = ["name", "item_class", "brand", "season", "hs_code", "
                            "qty_per_40hq", "on_hand", "avg_cost", "list_price"]
 
 
+COST_PRODUCT_COLUMNS = {"avg_cost", "margin_pct"}
+
+
+def visible_product_columns(request):
+    if "costs.view" in getattr(request, "perms", ()):
+        return PRODUCT_COLUMNS
+    return [c for c in PRODUCT_COLUMNS if c[0] not in COST_PRODUCT_COLUMNS]
+
+
 def product_cell(p, key):
     from inventory.views import attr_value
 
@@ -103,12 +112,13 @@ class ProductList(ErpListView):
 
         ctx = super().get_context_data(**kwargs)
         screen = "list:products.product"
-        keys = chosen_columns(self.request, screen, [c[0] for c in PRODUCT_COLUMNS], DEFAULT_PRODUCT_COLUMNS)
-        meta = {c[0]: c for c in PRODUCT_COLUMNS}
+        columns = visible_product_columns(self.request)
+        keys = chosen_columns(self.request, screen, [c[0] for c in columns], DEFAULT_PRODUCT_COLUMNS)
+        meta = {c[0]: c for c in columns}
         cols = [meta[k] for k in keys]
         ctx["cols"] = cols
         ctx["rows"] = [(p, [(c, product_cell(p, c[0])) for c in cols]) for p in ctx["object_list"]]
-        ctx.update(chooser_context(self.request, screen, [(c[0], c[1]) for c in PRODUCT_COLUMNS], keys))
+        ctx.update(chooser_context(self.request, screen, [(c[0], c[1]) for c in columns], keys))
         lookups = {k: LookupValue.objects.filter(kind=k, is_active=True)
                    for k in ("brand", "season", "size_range", "material", "customer_code")}
         ctx.update(
@@ -127,7 +137,8 @@ def product_export(request):
     for p in products:
         p.export_on_hand = p.on_hand or 0
     mode = "float" if request.GET.get("images") == "float" else "cell"
-    data = services.export_products_xlsx(products, image_mode=mode)
+    data = services.export_products_xlsx(products, image_mode=mode,
+                                         include_costs="costs.view" in getattr(request, "perms", ()))
     resp = HttpResponse(data, content_type=XLSX)
     resp["Content-Disposition"] = f'attachment; filename="products-{datetime.date.today():%Y%m%d}.xlsx"'
     return resp

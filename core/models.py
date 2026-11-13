@@ -2,6 +2,8 @@ from decimal import Decimal
 
 from django.db import models, transaction
 
+from .tenancy import TenantModel
+
 
 class TimeStamped(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
@@ -45,7 +47,7 @@ class Currency(models.Model):
         return reverse("core:currency_update", args=[self.pk])
 
 
-class ExchangeRate(models.Model):
+class ExchangeRate(TenantModel):
     currency = models.ForeignKey(Currency, on_delete=models.CASCADE, related_name="rates")
     date = models.DateField()
     rate = models.DecimalField(
@@ -53,7 +55,7 @@ class ExchangeRate(models.Model):
     )
 
     class Meta:
-        unique_together = ("currency", "date")
+        unique_together = ("company", "currency", "date")
         ordering = ["-date", "currency"]
 
     def __str__(self):
@@ -84,7 +86,13 @@ def default_sales_no_negative():
 
 
 class Company(models.Model):
+    """A company (tenant). One login can work in several companies through memberships."""
+
     name = models.CharField(max_length=200, default="My Import Company")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    logo = models.BinaryField(null=True, blank=True, editable=False)
+    logo_mime = models.CharField(max_length=50, blank=True, editable=False)
     legal_name = models.CharField(max_length=200, blank=True)
     tax_id = models.CharField(max_length=50, blank=True)
     address = models.TextField(blank=True)
@@ -133,21 +141,40 @@ class Company(models.Model):
         except ValueError:
             return None
 
-    _cache = None
+    _cache = {}
 
     @classmethod
     def get(cls):
-        """The company record, read once per request (the cache is cleared when each request starts and on save)."""
-        if cls._cache is not None:
-            return cls._cache
-        Currency.objects.get_or_create(code="USD", defaults={"name": "US Dollar", "symbol": "$"})
-        obj, _ = cls.objects.get_or_create(pk=1)
-        cls._cache = obj
+        """The company being worked in (current request / use_company block), else the default company.
+
+        Cached per request: the cache is cleared when each request starts and whenever a company is saved.
+        """
+        from .tenancy import current_company_id
+
+        cid = current_company_id()
+        if cid is None:
+            return cls.get_default()
+        obj = cls._cache.get(cid)
+        if obj is None:
+            obj = cls._cache[cid] = cls.objects.get(pk=cid)
+        return obj
+
+    @classmethod
+    def get_default(cls):
+        """First company (created on a fresh install). Used outside requests: scripts, migrations, tests."""
+        obj = cls._cache.get("default")
+        if obj is None:
+            Currency.objects.get_or_create(code="USD", defaults={"name": "US Dollar", "symbol": "$"})
+            obj = cls.objects.order_by("pk").first() or cls.objects.create()
+            cls._cache["default"] = obj
         return obj
 
     @classmethod
     def clear_cache(cls):
-        cls._cache = None
+        from .tenancy import reset_fallback
+
+        cls._cache = {}
+        reset_fallback()
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
@@ -163,11 +190,14 @@ def default_warehouse():
     return Warehouse.objects.filter(is_active=True).first()
 
 
-class Sequence(models.Model):
-    key = models.CharField(max_length=50, unique=True)
+class Sequence(TenantModel):
+    key = models.CharField(max_length=50)
     prefix = models.CharField(max_length=20)
     next_value = models.PositiveIntegerField(default=1)
     padding = models.PositiveSmallIntegerField(default=5)
+
+    class Meta:
+        unique_together = ("company", "key")
 
     def __str__(self):
         return f"{self.key} ({self.prefix})"
@@ -184,13 +214,13 @@ class Sequence(models.Model):
         return f"{seq.prefix}{value:0{seq.padding}d}"
 
 
-class NumberedMixin(models.Model):
+class NumberedMixin(TenantModel):
     """Assigns a document number from a Sequence on first save."""
 
     SEQUENCE_KEY = None
     SEQUENCE_PREFIX = None
 
-    number = models.CharField(max_length=30, unique=True, blank=True, editable=False)
+    number = models.CharField(max_length=30, blank=True, editable=False, db_index=True)
 
     class Meta:
         abstract = True
@@ -218,7 +248,7 @@ class UserPreference(models.Model):
         return f"{self.user} {self.key}"
 
 
-class SavedFilter(models.Model):
+class SavedFilter(TenantModel):
     """A named set of filters for a screen (stored as the query string)."""
 
     user = models.ForeignKey("auth.User", on_delete=models.CASCADE, related_name="saved_filters")
@@ -237,7 +267,7 @@ class SavedFilter(models.Model):
 
 # ----------------------------------------------------------------------------- files, notes, email
 
-class Attachment(models.Model):
+class Attachment(TenantModel):
     """A file attached to any document (stored in the database so it survives redeploys)."""
 
     content_type = models.ForeignKey("contenttypes.ContentType", on_delete=models.CASCADE)
@@ -258,7 +288,7 @@ class Attachment(models.Model):
         return self.filename
 
 
-class Note(models.Model):
+class Note(TenantModel):
     """Time-stamped internal note on any document."""
 
     content_type = models.ForeignKey("contenttypes.ContentType", on_delete=models.CASCADE)
@@ -272,14 +302,14 @@ class Note(models.Model):
         indexes = [models.Index(fields=["content_type", "object_id"])]
 
 
-class EmailTemplate(models.Model):
+class EmailTemplate(TenantModel):
     KINDS = [
         ("sales_order", "Sales order confirmation"),
         ("purchase_order", "Purchase order to vendor"),
         ("invoice", "Customer invoice"),
         ("statement", "Customer statement"),
     ]
-    kind = models.CharField(max_length=20, choices=KINDS, unique=True)
+    kind = models.CharField(max_length=20, choices=KINDS)
     subject = models.CharField(max_length=255)
     body = models.TextField(help_text="Placeholders: {number} {company} {customer} {vendor} {buyer} {total} "
                                       "{currency} {customer_po} {date} {due_date} {ship_start} {cancel_date} {user}")
@@ -288,6 +318,7 @@ class EmailTemplate(models.Model):
 
     class Meta:
         ordering = ["kind"]
+        unique_together = ("company", "kind")
 
     def __str__(self):
         return self.get_kind_display()
@@ -298,7 +329,7 @@ class EmailTemplate(models.Model):
         return reverse("core:emailtemplate_update", args=[self.pk])
 
 
-class EmailLog(models.Model):
+class EmailLog(TenantModel):
     SENT, FAILED, NOT_CONFIGURED = "sent", "failed", "not_configured"
     STATUSES = [(SENT, "Sent"), (FAILED, "Failed"), (NOT_CONFIGURED, "Not sent — email not configured")]
     content_type = models.ForeignKey("contenttypes.ContentType", null=True, blank=True, on_delete=models.SET_NULL)
@@ -320,3 +351,39 @@ class EmailLog(models.Model):
 
     def __str__(self):
         return f"{self.subject} -> {self.to}"
+
+
+# ----------------------------------------------------------------------------- users, roles, memberships
+
+class Role(models.Model):
+    """A set of permissions within one company (see core.permissions)."""
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="roles")
+    name = models.CharField(max_length=60)
+    description = models.CharField(max_length=255, blank=True)
+    permissions = models.JSONField(default=list)
+    is_system = models.BooleanField(default=False, help_text="Built-in role (can be edited, not deleted)")
+
+    class Meta:
+        unique_together = ("company", "name")
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class Membership(models.Model):
+    """A user's access to a company with a role. Active memberships are the billable seats."""
+
+    user = models.ForeignKey("auth.User", on_delete=models.CASCADE, related_name="memberships")
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="memberships")
+    role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name="memberships")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "company")
+        ordering = ["company__name", "user__username"]
+
+    def __str__(self):
+        return f"{self.user} @ {self.company} ({self.role})"

@@ -28,7 +28,7 @@ class ColumnChooserTests(TestCase):
         self.assertEqual([a for _, a in resp.context["columns"]], ["number", "buyer", "total"])
         self.assertContains(resp, "Rachel Kim")
         # another user still sees the defaults
-        other = get_user_model().objects.create_user("clerk", password="pw-clerk-123")
+        other = self.f.member("clerk")
         self.client.force_login(other)
         self.assertIn("status", [a for _, a in self.client.get("/sales/orders/").context["columns"]])
         self.client.force_login(self.f.user)
@@ -51,7 +51,7 @@ class ColumnChooserTests(TestCase):
         self.assertEqual(SavedFilter.objects.count(), 2)
         page = self.client.get("/inventory/availability/").content.decode()
         self.assertIn("/inventory/availability/?season=1&amp;show=all", page)
-        other = get_user_model().objects.create_user("clerk", password="pw-clerk-123")
+        other = self.f.member("clerk")
         self.client.force_login(other)
         page = self.client.get("/inventory/availability/").content.decode()
         self.assertIn("Team view", page)

@@ -50,7 +50,7 @@
   <div><span>Subtotal</span><span>{{ object.subtotal|money }}</span></div>
   <div><span>Tax ({{ object.tax_rate|pct }})</span><span>{{ object.tax|money }}</span></div>
   <div class="grand"><span>Total</span><span>{{ object.total|money }}</span></div>
-  <div class="muted"><span>Est. gross margin</span><span>{{ object.estimated_margin|money }}</span></div>
+{% if can_see_costs %}<div class="muted"><span>Est. gross margin</span><span>{{ object.estimated_margin|money }}</span></div>{% endif %}
 </div></div>
 <div class="grid-2">
   <div class="card table-wrap"><h3>Deliveries</h3><table class="table compact"><tbody>
