@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h1>Change log</h1><div class="sub">Every change to orders, POs, shipments, invoices, bills, payments, items, customers, vendors, settings and users — who, when and what.</div></div></div>
+<form class="toolbar" method="get">
+  <input type="search" name="q" value="{{ params.q }}" placeholder="Document / record…">
+  <select name="type"><option value="">All record types</option>{% for t in types %}<option value="{{ t.pk }}" {% if params.type == t.pk|stringformat:"s" %}selected{% endif %}>{{ t.name|capfirst }}</option>{% endfor %}</select>
+  <select name="user"><option value="">All users</option>{% for u in users %}<option value="{{ u.pk }}" {% if params.user == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>{% endfor %}</select>
+  <select name="action"><option value="">All actions</option>{% for k, v in actions %}<option value="{{ k }}" {% if params.action == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+  <input type="date" name="start" value="{{ params.start }}"><input type="date" name="end" value="{{ params.end }}">
+  <button class="btn">Filter</button>
+</form>
+<div class="card table-wrap"><table class="table compact"><thead><tr><th>When</th><th>User</th><th>Action</th><th>Record</th><th>Changes</th></tr></thead><tbody>
+{% for e, changes in rows %}<tr><td style="white-space:nowrap">{{ e.at|date:"Y-m-d H:i" }}</td><td>{% if e.user %}{{ e.user.get_full_name|default:e.user.username }}{% else %}System{% endif %}</td><td>{{ e.get_action_display }}</td><td>{{ e.content_type.name|capfirst }}<br><strong>{{ e.object_repr }}</strong></td>
+<td>{% if e.action == "update" %}{% for label, old, new in changes %}<div><span class="muted">{{ label }}:</span> <span class="old" style="color:var(--bad);text-decoration:line-through">{{ old|default:"(blank)" }}</span> → <strong style="color:var(--ok)">{{ new|default:"(blank)" }}</strong></div>{% endfor %}{% elif e.action == "create" %}<span class="muted">{{ changes|length }} fields set</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="empty">No changes recorded.</td></tr>{% endfor %}
+</tbody></table></div>
+{% include "core/_pagination.html" %}
+{% endblock %}

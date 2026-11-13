@@ -24,4 +24,5 @@
 </div></div>
 {% if object.allocations.exists %}<div class="card table-wrap"><h3>Payments</h3><table class="table compact"><tbody>{% for a in object.allocations.all %}<tr><td><a href="{{ a.payment.get_absolute_url }}">{{ a.payment.number }}</a></td><td>{{ a.payment.date|date:"Y-m-d" }}</td><td class="num">{{ a.amount|money }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
 {% if object.notes %}<div class="card"><h3>Notes</h3>{{ object.notes|linebreaksbr }}</div>{% endif %}
+{% history_panel object %}
 {% endblock %}

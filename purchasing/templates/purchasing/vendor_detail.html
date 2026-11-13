@@ -35,4 +35,5 @@
 {% for c in contacts %}<div>{{ c.user.get_full_name|default:c.user.username }} ({{ c.user.username }}){% if c.title %} — {{ c.title }}{% endif %}</div>{% empty %}<p class="muted">No portal access yet. Add a portal user so this vendor can confirm POs, post shipment details, upload documents and submit invoices.</p>{% endfor %}
 </div>
 {% if object.notes or object.bank_details %}<div class="grid-2">{% if object.bank_details %}<div class="card"><h3>Bank details</h3><pre class="plain">{{ object.bank_details }}</pre></div>{% endif %}{% if object.notes %}<div class="card"><h3>Notes</h3>{{ object.notes|linebreaksbr }}</div>{% endif %}</div>{% endif %}
+{% history_panel object %}
 {% endblock %}

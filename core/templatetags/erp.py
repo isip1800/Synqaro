@@ -130,6 +130,7 @@ def notes_and_files(context, obj):
     ct = ContentType.objects.get_for_model(obj)
     return {
         "obj": obj, "ct_id": ct.pk, "csrf_token": context.get("csrf_token"), "user": context.get("user"),
+        "can_see_costs": context.get("can_see_costs"), "perms": context.get("perms"),
         "files": Attachment.objects.filter(content_type=ct, object_id=obj.pk).defer("data"),
         "notes": Note.objects.filter(content_type=ct, object_id=obj.pk).select_related("author"),
         "emails": EmailLog.objects.filter(content_type=ct, object_id=obj.pk)[:10],
@@ -166,3 +167,18 @@ def doc_ct(obj):
     from django.contrib.contenttypes.models import ContentType
 
     return ContentType.objects.get_for_model(obj).pk
+
+
+@register.inclusion_tag("core/_history.html", takes_context=True)
+def history_panel(context, obj, limit=50):
+    from core.audit import history_for, visible_changes
+
+    costs = bool(context.get("can_see_costs"))
+    entries = []
+    for e in history_for(obj, limit):
+        changes = visible_changes(e, costs)
+        if e.action == "update" and not changes:
+            continue  # only hidden (cost) fields changed
+        entries.append({"e": e, "is_line": e.object_id != obj.pk or e.content_type.model_class() is not type(obj),
+                        "changes": changes})
+    return {"entries": entries, "obj": obj}

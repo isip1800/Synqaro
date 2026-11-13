@@ -55,6 +55,7 @@ NAV = [
         ("Currencies & FX Rates", "core:exchangerate_list", "settings/rates"),
         ("Vendor Portal Users", "portal:contact_list", "portal-users"),
         ("Email", "core:email_settings", "settings/email"),
+        ("Change log", "core:audit_log", "settings/change-log"),
     ]),
 ]
 

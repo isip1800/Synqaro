@@ -83,4 +83,5 @@
 {% for b in object.bills.all %}<tr><td><a href="{{ b.get_absolute_url }}">{{ b.number }}</a></td><td>{{ b.vendor }}</td><td>{{ b.vendor_invoice_number }}</td><td>{% status_badge b %}</td>{% if can_see_costs %}<td class="num">{{ b.total|money }} {{ b.currency }}</td>{% endif %}</tr>{% endfor %}
 </tbody></table></div>{% endif %}
 {% if object.notes %}<div class="card"><h3>Notes</h3>{{ object.notes|linebreaksbr }}</div>{% endif %}
+{% history_panel object %}
 {% endblock %}

@@ -12,3 +12,7 @@ class CoreConfig(AppConfig):
 
         request_started.connect(lambda **kwargs: Company.clear_cache(), weak=False,
                                 dispatch_uid="core.company_cache")
+
+        from . import audit
+
+        audit.connect()

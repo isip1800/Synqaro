@@ -387,3 +387,27 @@ class Membership(models.Model):
 
     def __str__(self):
         return f"{self.user} @ {self.company} ({self.role})"
+
+
+class AuditLog(TenantModel):
+    """One change to a tracked record: who, when, what (field -> [old, new])."""
+
+    CREATE, UPDATE, DELETE = "create", "update", "delete"
+    ACTIONS = [(CREATE, "Created"), (UPDATE, "Changed"), (DELETE, "Deleted")]
+    content_type = models.ForeignKey("contenttypes.ContentType", on_delete=models.CASCADE, related_name="+")
+    object_id = models.PositiveBigIntegerField()
+    object_repr = models.CharField(max_length=200)
+    parent_type = models.ForeignKey("contenttypes.ContentType", null=True, blank=True, on_delete=models.CASCADE,
+                                    related_name="+")
+    parent_id = models.PositiveBigIntegerField(null=True, blank=True)
+    action = models.CharField(max_length=10, choices=ACTIONS)
+    changes = models.JSONField(default=dict, blank=True)
+    user = models.ForeignKey("auth.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-at", "-id"]
+        indexes = [models.Index(fields=["content_type", "object_id"]), models.Index(fields=["parent_type", "parent_id"])]
+
+    def __str__(self):
+        return f"{self.get_action_display()} {self.object_repr}"

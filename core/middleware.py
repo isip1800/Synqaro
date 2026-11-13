@@ -40,13 +40,16 @@ class CompanyMiddleware:
             from django.shortcuts import render
 
             return render(request, "core/no_access.html", {"title": "No company access"}, status=403)
-        token = activate(company_id)
+        from .audit import reset_user, set_user
+
+        token, user_token = activate(company_id), set_user(user)
         try:
             from .models import Company
 
             request.company = Company.get()
             return self.get_response(request)
         finally:
+            reset_user(user_token)
             deactivate(token)
 
     def resolve(self, request, user):
