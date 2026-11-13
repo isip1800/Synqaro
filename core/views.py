@@ -394,3 +394,44 @@ def role_form(request, pk=None):
         groups.setdefault(group, []).append((code, label, role is not None and code in role.permissions))
     return render(request, "core/role_form.html", {"title": f"Role: {role.name}" if role else "New role",
                                                    "role": role, "groups": groups.items()})
+
+
+class AuditLogList(ErpListView):
+    from .models import AuditLog as model  # noqa: N813
+
+    title = "Change log"
+    template_name = "core/audit_list.html"
+    paginate_by = 100
+    search_fields = ("object_repr", "user__username")
+    select_related = ("user", "content_type")
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        g = self.request.GET
+        if g.get("type"):
+            qs = qs.filter(content_type_id=g["type"])
+        if g.get("user"):
+            qs = qs.filter(user_id=g["user"])
+        if g.get("action"):
+            qs = qs.filter(action=g["action"])
+        if g.get("start"):
+            qs = qs.filter(at__date__gte=g["start"])
+        if g.get("end"):
+            qs = qs.filter(at__date__lte=g["end"])
+        return qs
+
+    def get_context_data(self, **kwargs):
+        from django.contrib.auth import get_user_model
+        from django.contrib.contenttypes.models import ContentType
+
+        from .audit import TRACKED, visible_changes
+        from .models import AuditLog
+
+        ctx = super().get_context_data(**kwargs)
+        types = [ContentType.objects.get_for_model(__import__("django.apps", fromlist=["apps"]).apps.get_model(l))
+                 for l in TRACKED]
+        ctx.update(types=sorted(types, key=lambda t: t.name), actions=AuditLog.ACTIONS, params=self.request.GET,
+                   users=get_user_model().objects.filter(memberships__company=self.request.company).distinct(),
+                   rows=[(e, visible_changes(e, "costs.view" in getattr(self.request, "perms", ())))
+                         for e in ctx["object_list"]])
+        return ctx

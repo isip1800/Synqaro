@@ -11,4 +11,5 @@
 <div class="card table-wrap"><h3>Applied to invoices</h3><table class="table"><thead><tr><th>Invoice</th><th>Date</th><th class="num">Invoice total</th><th class="num">Applied</th></tr></thead><tbody>
 {% for a in object.allocations.all %}<tr><td><a href="{{ a.invoice.get_absolute_url }}">{{ a.invoice.number }}</a></td><td>{{ a.invoice.invoice_date|date:"Y-m-d" }}</td><td class="num">{{ a.invoice.total|money }}</td><td class="num">{{ a.amount|money }}</td></tr>{% empty %}<tr><td colspan="4" class="empty">Not allocated — use Auto-allocate or Edit.</td></tr>{% endfor %}
 </tbody></table></div>
+{% history_panel object %}
 {% endblock %}

@@ -6,7 +6,7 @@
       <textarea name="text" rows="2" placeholder="Add a note…" required></textarea>
       <button class="btn btn-sm btn-primary">Add note</button>
     </form>
-    {% for n in notes %}<div class="note"><div class="note-meta">{{ n.author.get_full_name|default:n.author.username|default:"system" }} · {{ n.created_at|date:"Y-m-d H:i" }}
+    {% for n in notes %}<div class="note"><div class="note-meta">{% if n.author %}{{ n.author.get_full_name|default:n.author.username }}{% else %}system{% endif %} · {{ n.created_at|date:"Y-m-d H:i" }}
       {% if n.author_id == user.id or user.is_superuser %}<form method="post" action="{% url 'core:note_delete' n.pk %}" class="inline">{% csrf_token %}<button class="link" title="Delete note">✕</button></form>{% endif %}</div>
       <div>{{ n.text|linebreaksbr }}</div></div>
     {% empty %}<p class="muted">No notes yet.</p>{% endfor %}
@@ -24,3 +24,5 @@
     {% if emails %}<h3 style="margin-top:12px">Emails</h3><table class="table compact"><tbody>{% for e in emails %}<tr><td>{{ e.created_at|date:"Y-m-d H:i" }}</td><td>{{ e.to }}</td><td>{{ e.subject }}</td><td><span class="badge {% if e.status == 'sent' %}badge-paid{% elif e.status == 'failed' %}badge-void{% else %}badge-partial{% endif %}">{{ e.get_status_display }}</span></td></tr>{% endfor %}</tbody></table>{% endif %}
   </div>
 </div>
+
+{% load erp %}{% history_panel obj %}

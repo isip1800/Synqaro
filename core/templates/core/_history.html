@@ -1,0 +1,10 @@
+<details class="card history" id="history">
+  <summary><h3 style="display:inline">History</h3> <span class="muted">{{ entries|length }} change{{ entries|length|pluralize }}{% if entries %} · last {{ entries.0.e.at|date:"Y-m-d H:i" }}{% if entries.0.e.user %} by {{ entries.0.e.user }}{% endif %}{% endif %}</span></summary>
+  {% for item in entries %}{% with e=item.e %}
+  <div class="hist">
+    <div class="hist-meta"><strong>{% if e.user %}{{ e.user.get_full_name|default:e.user.username }}{% else %}System{% endif %}</strong> · {{ e.at|date:"Y-m-d H:i" }} · {{ e.get_action_display }}{% if item.is_line %} {{ e.content_type.name }} <em>{{ e.object_repr }}</em>{% endif %}</div>
+    {% if e.action == "update" %}<table class="table compact hist-table"><tbody>{% for label, old, new in item.changes %}<tr><td class="muted" style="width:180px">{{ label }}</td><td><span class="old">{{ old|default:"(blank)" }}</span> → <span class="new">{{ new|default:"(blank)" }}</span></td></tr>{% endfor %}</tbody></table>
+    {% elif e.action == "create" and item.is_line %}<div class="muted">{% for label, old, new in item.changes|slice:":6" %}{{ label }}: {{ new }}{% if not forloop.last %} · {% endif %}{% endfor %}</div>{% endif %}
+  </div>
+  {% endwith %}{% empty %}<p class="muted">No changes recorded yet.</p>{% endfor %}
+</details>

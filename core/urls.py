@@ -25,6 +25,7 @@ urlpatterns = [
     path("email/<str:key>/<int:pk>/", documents.email_compose, name="email_compose"),
     path("email/", views.email_settings, name="email_settings"),
     path("email/log/", views.EmailLogList.as_view(), name="email_log"),
+    path("change-log/", views.AuditLogList.as_view(), name="audit_log"),
     *crud_urls(EmailTemplate, prefix="email/templates/", fields=["kind", "subject", "body", "cc", "attach_pdf"],
                columns=(("Document", "kind"), ("Subject", "subject"), ("Attach PDF", "attach_pdf"),
                         ("Always CC", "cc")), detail=False),
