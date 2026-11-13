@@ -32,7 +32,7 @@ class Command(BaseCommand):
         parser.add_argument("--if-empty", action="store_true", help="Skip quietly if data already exists")
 
     def handle(self, *args, **opts):
-        if Product.objects.exists():
+        if Product.all_companies.exists():
             if opts["if_empty"]:
                 self.stdout.write("Data already exists; demo seed skipped.")
                 return

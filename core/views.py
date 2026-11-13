@@ -256,8 +256,11 @@ def company_list(request):
     class NewCompanyForm(forms.Form):
         name = forms.CharField(max_length=200)
         base_currency = forms.ModelChoiceField(queryset=Currency.objects.all(), initial="USD")
-        copy_setup = forms.BooleanField(required=False, initial=True,
-                                        label="Copy item classes, item details and HTS codes from the current company")
+        copy_setup = forms.BooleanField(
+            required=False, initial=False, label="Copy product setup lists from the current company",
+            help_text="Only the lists used to describe items: item classes, item-detail lists (brand, season, "
+                      "material…) and HTS codes. Items, customers, vendors, orders, invoices and stock are never "
+                      "copied — the new company starts empty.")
 
     can_create = _is_owner_somewhere(request.user)
     form = NewCompanyForm(request.POST or None)

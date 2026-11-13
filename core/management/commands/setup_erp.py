@@ -16,11 +16,16 @@ class Command(BaseCommand):
         for code, name, sym in [("USD", "US Dollar", "$"), ("EUR", "Euro", "€"), ("CNY", "Chinese Yuan", "¥"),
                                 ("GBP", "British Pound", "£")]:
             Currency.objects.get_or_create(code=code, defaults={"name": name, "symbol": sym})
-        company = Company.get_default()
-        setup_chart_of_accounts()
         from core.models import Membership
         from core.permissions import ensure_roles
+        from core.tenancy import use_company
 
+        company = Company.get_default()
+        # Every company keeps its own chart of accounts and roles: top them up one company at a time
+        for c in Company.objects.order_by("pk"):
+            with use_company(c):
+                setup_chart_of_accounts()
+                ensure_roles(c)
         roles = ensure_roles(company)
         if opts.get("admin"):
             User = get_user_model()

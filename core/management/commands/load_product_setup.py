@@ -7,5 +7,10 @@ class Command(BaseCommand):
     help = "Load sample item classes, item-detail lookups and HTS codes (safe to re-run; never overwrites)."
 
     def handle(self, *args, **opts):
-        load_sample_setup()
+        from core.models import Company
+        from core.tenancy import use_company
+
+        # Sample data is for the first (demo) company only; other companies keep their own lists
+        with use_company(Company.get_default()):
+            load_sample_setup()
         self.stdout.write(self.style.SUCCESS("Sample product setup loaded."))
