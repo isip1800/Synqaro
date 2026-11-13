@@ -1,0 +1,20 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head"><h1>Chargebacks &amp; deductions report</h1>
+  <div class="actions"><a class="btn" href="{% url 'returns:chargeback_list' %}">All chargebacks</a></div></div>
+<form class="toolbar" method="get">
+  <label>From <input type="date" name="start" value="{{ start|date:'Y-m-d' }}"></label>
+  <label>To <input type="date" name="end" value="{{ end|date:'Y-m-d' }}"></label>
+  <button class="btn">Run</button>
+</form>
+<div class="grid-2">
+  <div class="card table-wrap"><h3>By customer</h3><table class="table compact">
+    <thead><tr><th>Customer</th><th class="num">#</th><th class="num">Total</th><th class="num">Open</th><th class="num">Written off</th><th class="num">Recovered</th></tr></thead><tbody>
+    {% for r in by_customer %}<tr><td>{{ r.customer__name }}</td><td class="num">{{ r.n }}</td><td class="num">{{ r.total|money }}</td><td class="num">{{ r.open|money }}</td><td class="num">{{ r.accepted|money }}</td><td class="num">{{ r.won|money }}</td></tr>{% empty %}<tr><td colspan="6" class="empty">No chargebacks in this period.</td></tr>{% endfor %}
+    </tbody><tfoot><tr><td>Total</td><td class="num">{{ totals.n }}</td><td class="num">{{ totals.total|money }}</td><td class="num">{{ totals.open|money }}</td><td class="num">{{ totals.accepted|money }}</td><td class="num">{{ totals.won|money }}</td></tr></tfoot></table></div>
+  <div class="card table-wrap"><h3>By type</h3><table class="table compact">
+    <thead><tr><th>Type</th><th class="num">#</th><th class="num">Total</th><th class="num">Open</th><th class="num">Written off</th><th class="num">Recovered</th></tr></thead><tbody>
+    {% for r in by_type %}<tr><td>{{ r.label }}</td><td class="num">{{ r.n }}</td><td class="num">{{ r.total|money }}</td><td class="num">{{ r.open|money }}</td><td class="num">{{ r.accepted|money }}</td><td class="num">{{ r.won|money }}</td></tr>{% empty %}<tr><td colspan="6" class="empty">—</td></tr>{% endfor %}
+    </tbody></table></div>
+</div>
+{% endblock %}

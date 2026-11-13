@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Return to vendor {{ object.number }} {% status_badge object %}</h1>
+    <div class="sub"><a href="{{ object.vendor.get_absolute_url }}">{{ object.vendor }}</a> · {{ object.date|date:"Y-m-d" }} · {{ object.get_reason_display }} · from {{ object.warehouse.code }}{% if object.purchase_order %} · <a href="{{ object.purchase_order.get_absolute_url }}">{{ object.purchase_order.number }}</a>{% endif %}{% include "returns/_journal.html" %}</div></div>
+  <div class="actions">
+    {% if "purchasing.edit" in perms %}
+      {% if object.status == 'draft' %}
+        <a class="btn" href="{% url 'returns:vendorreturn_update' object.pk %}">Edit</a>
+        <form method="post" action="{% url 'returns:vendorreturn_ship' object.pk %}" onsubmit="return confirm('Ship these goods back? Stock is relieved now.')">{% csrf_token %}<button class="btn btn-primary">Ship to vendor</button></form>
+        <form method="post" action="{% url 'returns:vendorreturn_cancel' object.pk %}" onsubmit="return confirm('Cancel this return?')">{% csrf_token %}<button class="btn btn-danger">Cancel</button></form>
+      {% endif %}
+      {% if object.status == 'shipped' and "accounting.post" in perms %}<form method="post" action="{% url 'returns:vendorreturn_credit' object.pk %}">{% csrf_token %}<button class="btn btn-primary">Record vendor credit</button></form>{% endif %}
+    {% endif %}
+  </div>
+</div>
+<div class="card table-wrap"><table class="table">
+<thead><tr><th>Product</th><th class="num">Qty</th>{% if can_see_costs %}<th class="num">Credit value / unit</th><th class="num">Amount</th>{% endif %}</tr></thead><tbody>
+{% for l in object.lines.all %}<tr><td><a href="{{ l.product.get_absolute_url }}">{{ l.product.sku }}</a> {{ l.product.name }}</td><td class="num">{{ l.quantity|qty }}</td>{% if can_see_costs %}<td class="num">{% if l.unit_cost is None %}<span class="muted">avg cost</span>{% else %}{{ l.unit_cost|unitcost }}{% endif %}</td><td class="num">{{ l.amount|money }}</td>{% endif %}</tr>{% empty %}<tr><td colspan="4" class="empty">No lines.</td></tr>{% endfor %}
+</tbody>{% if can_see_costs %}<tfoot><tr><td colspan="3">Total</td><td class="num">{{ object.total|money }}</td></tr></tfoot>{% endif %}</table></div>
+{% with credits=object.credits.all %}{% if credits %}<div class="card table-wrap"><h3>Vendor credits</h3><table class="table compact"><tbody>{% for c in credits %}<tr><td><a href="{{ c.get_absolute_url }}">{{ c.number }}</a></td><td>{% status_badge c %}</td>{% if can_see_costs %}<td class="num">{{ c.total|money }} {{ c.currency }}</td>{% endif %}</tr>{% endfor %}</tbody></table></div>{% endif %}{% endwith %}
+<div class="card"><dl class="dl-grid"><div><dt>Vendor RA #</dt><dd>{{ object.vendor_rma|default:"—" }}</dd></div></dl>{% if object.notes %}<p>{{ object.notes|linebreaksbr }}</p>{% endif %}</div>
+{% notes_and_files object %}
+{% endblock %}

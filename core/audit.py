@@ -23,6 +23,10 @@ TRACKED = {
     "products.PriceList": None, "products.PriceListItem": "price_list",
     "inventory.Warehouse": None, "inventory.StockAdjustment": None, "inventory.StockAdjustmentLine": "adjustment",
     "inventory.StockTransfer": None, "inventory.StockTransferLine": "transfer",
+    "returns.CustomerReturn": None, "returns.CustomerReturnLine": "customer_return",
+    "returns.CreditMemo": None, "returns.CreditMemoLine": "credit_memo", "returns.Chargeback": None,
+    "returns.VendorReturn": None, "returns.VendorReturnLine": "vendor_return",
+    "returns.VendorCredit": None, "returns.VendorCreditLine": "vendor_credit",
     "salesteam.SalesRep": None, "core.Company": None, "core.Role": None, "core.Membership": None,
 }
 IGNORED_FIELDS = {"id", "created_at", "updated_at", "company", "data", "thumbnail", "logo",
@@ -38,6 +42,7 @@ COST_FIELDS = {
     "purchasing.ShipmentLine": {"allocated_landed_cost", "unit_landed_cost"},
     "purchasing.LandedCost": {"amount"},
     "inventory.StockAdjustmentLine": {"unit_cost"},
+    "returns.VendorReturnLine": {"unit_cost"},
 }
 
 

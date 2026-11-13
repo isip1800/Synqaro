@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% load erp %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Chargeback {{ object.number }} {% status_badge object %}</h1>
+    <div class="sub"><a href="{{ object.customer.get_absolute_url }}">{{ object.customer }}</a> · {{ object.date|date:"Y-m-d" }} · {{ object.get_chargeback_type_display }}{% if object.invoice %} · <a href="{{ object.invoice.get_absolute_url }}">{{ object.invoice.number }}</a>{% endif %}{% if object.sales_order %} · <a href="{{ object.sales_order.get_absolute_url }}">{{ object.sales_order.number }}</a>{% endif %}{% include "returns/_journal.html" %}</div></div>
+  <div class="actions">{% if "returns.edit" in perms and object.status in 'open,disputed' %}<a class="btn" href="{% url 'returns:chargeback_update' object.pk %}">Edit</a>{% endif %}</div>
+</div>
+<div class="card"><dl class="dl-grid">
+  <div><dt>Amount deducted</dt><dd><strong>{{ object.amount|money }}</strong></dd></div>
+  <div><dt>Deduction / debit memo #</dt><dd>{{ object.deduction_reference|default:"—" }}</dd></div>
+  <div><dt>Dispute deadline</dt><dd>{{ object.dispute_deadline|date:"Y-m-d"|default:"—" }}</dd></div>
+  {% if object.status == 'accepted' %}<div><dt>Written off</dt><dd>{{ object.accepted_amount|money }}</dd></div>{% endif %}
+  {% if object.resolved_at %}<div><dt>Resolved</dt><dd>{{ object.resolved_at|date:"Y-m-d" }}</dd></div>{% endif %}
+</dl>
+{% if object.description %}<p>{{ object.description|linebreaksbr }}</p>{% endif %}
+{% if object.resolution_notes %}<h3>Dispute / resolution log</h3><p>{{ object.resolution_notes|linebreaksbr }}</p>{% endif %}
+</div>
+{% if "returns.edit" in perms and object.status in 'open,disputed' %}
+<div class="grid-2">
+  <div class="card"><h3>Dispute</h3><p class="muted">Send backup (POD, BOL, routing confirmation) to the retailer and log it here.</p>
+    <form method="post" action="{% url 'returns:chargeback_action' object.pk 'dispute' %}" class="inline-form">{% csrf_token %}
+      <label class="field"><span>Note</span><input name="notes" placeholder="e.g. Sent POD + carrier confirmation"></label><button class="btn">Mark disputed</button></form>
+    <form method="post" action="{% url 'returns:chargeback_action' object.pk 'won' %}" class="inline-form" style="margin-top:8px">{% csrf_token %}
+      <label class="field"><span>Note</span><input name="notes" placeholder="Retailer reversed the deduction"></label><button class="btn btn-primary">Won / recovered</button></form>
+  </div>
+  <div class="card"><h3>Accept (write off)</h3><p class="muted">Posts the deduction to Customer Chargebacks expense and clears it from the customer's balance{% if object.invoice %} on {{ object.invoice.number }}{% endif %}.</p>
+    <form method="post" action="{% url 'returns:chargeback_action' object.pk 'accept' %}" class="inline-form" onsubmit="return confirm('Write off this deduction?')">{% csrf_token %}
+      <label class="field"><span>Amount</span><input type="number" step="0.01" name="amount" value="{{ object.amount }}"></label>
+      <label class="field"><span>Note</span><input name="notes"></label><button class="btn btn-danger">Accept &amp; write off</button></form>
+    <form method="post" action="{% url 'returns:chargeback_action' object.pk 'void' %}" style="margin-top:8px" onsubmit="return confirm('Void this chargeback (entered in error)?')">{% csrf_token %}<button class="btn">Void (entered in error)</button></form>
+  </div>
+</div>
+{% endif %}
+{% notes_and_files object %}
+{% endblock %}

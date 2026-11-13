@@ -47,6 +47,8 @@ class StockMove(TenantModel):
         (ADJUSTMENT, "Adjustment"),
         (TRANSFER_IN, "Transfer in"),
         (TRANSFER_OUT, "Transfer out"),
+        ("customer_return", "Customer return"),
+        ("vendor_return", "Return to vendor"),
     ]
     date = models.DateField(db_index=True)
     product = models.ForeignKey("products.Product", on_delete=models.PROTECT, related_name="moves")

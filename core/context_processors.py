@@ -7,11 +7,14 @@ NAV = [
         ("Sales Orders & Quotes", "sales:salesorder_list", "sales/orders"),
         ("Deliveries", "sales:delivery_list", "sales/deliveries"),
         ("Customers", "sales:customer_list", "sales/customers"),
+        ("Customer Returns (RMA)", "returns:customerreturn_list", "returns/customer-returns"),
+        ("Chargebacks", "returns:chargeback_list", "returns/chargebacks"),
     ]),
     ("Purchasing", [
         ("Purchase Orders", "purchasing:purchaseorder_list", "purchasing/orders"),
         ("Goods Receipts", "purchasing:goodsreceipt_list", "purchasing/receipts"),
         ("Vendors", "purchasing:vendor_list", "purchasing/vendors"),
+        ("Returns to Vendor", "returns:vendorreturn_list", "returns/vendor-returns"),
     ]),
     ("Import Management", [
         ("Shipments", "purchasing:shipment_list", "purchasing/shipments"),
@@ -20,8 +23,10 @@ NAV = [
     ("Accounting", [
         ("Customer Invoices (AR)", "accounting:customerinvoice_list", "accounting/invoices"),
         ("Customer Payments", "accounting:customerpayment_list", "accounting/customer-payments"),
+        ("Credit Memos", "returns:creditmemo_list", "returns/credit-memos"),
         ("Vendor Bills (AP)", "accounting:vendorbill_list", "accounting/bills"),
         ("Vendor Payments", "accounting:vendorpayment_list", "accounting/vendor-payments"),
+        ("Vendor Credits", "returns:vendorcredit_list", "returns/vendor-credits"),
         ("Journal Entries", "accounting:journalentry_list", "accounting/journal"),
         ("Chart of Accounts", "accounting:account_list", "accounting/accounts"),
         ("Financial Reports", "accounting:reports", "accounting/reports"),

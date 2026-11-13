@@ -1,0 +1,10 @@
+{% extends "core/list.html" %}{% load erp %}
+{% block list_actions %}<a class="btn" href="{% url 'returns:chargeback_report' %}">Deductions report</a>{{ block.super }}{% endblock %}
+{% block list_top %}
+<div class="kpis">
+  <div class="kpi"><div class="label">Open &amp; disputed</div><div class="value">{{ cb_summary.open_amt|money }}</div><div class="note">{{ cb_summary.open_n }} chargeback{{ cb_summary.open_n|pluralize }}</div></div>
+  <div class="kpi {% if cb_summary.overdue %}bad{% endif %}"><div class="label">Past dispute deadline</div><div class="value">{{ cb_summary.overdue }}</div><div class="note">still open</div></div>
+  <div class="kpi"><div class="label">Written off</div><div class="value">{{ cb_summary.accepted|money }}</div></div>
+  <div class="kpi"><div class="label">Recovered</div><div class="value">{{ cb_summary.won|money }}</div></div>
+</div>
+{% endblock %}

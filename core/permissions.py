@@ -112,6 +112,8 @@ def required_permission(namespace, url_name, method):
         if mod == "salesteam":
             return "salesteam.manage"
         return f"{mod}.edit"
+    if namespace == "returns":
+        return _returns_permission(url_name, method)
     if namespace == "core":
         if url_name in OPEN_CORE:
             return ""
@@ -121,3 +123,22 @@ def required_permission(namespace, url_name, method):
             return ""  # listing your companies / creating one is checked in the view
         return "settings.manage"
     return None
+
+
+RETURNS_RULES = (
+    # url_name prefix: (view permission, change permission)
+    ("customerreturn", "sales.view", "returns.edit"),
+    ("chargeback", "sales.view", "returns.edit"),
+    ("creditmemo", "accounting.view", "accounting.post"),
+    ("vendorcredit", "accounting.view", "accounting.post"),
+    ("vendorreturn", "purchasing.view", "purchasing.edit"),
+)
+
+
+def _returns_permission(url_name, method):
+    for prefix, view, change in RETURNS_RULES:
+        if url_name.startswith(prefix):
+            if method in ("GET", "HEAD", "OPTIONS") and not url_name.endswith(("_create", "_update")):
+                return view
+            return change
+    return "settings.manage"

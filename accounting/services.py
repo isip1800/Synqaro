@@ -24,6 +24,7 @@ SYSTEM_ACCOUNTS = {
     "AR": ("1100", "Accounts Receivable", Account.ASSET, False),
     "INVENTORY": ("1200", "Inventory", Account.ASSET, False),
     "VENDOR_DEPOSITS": ("1300", "Vendor Deposits / Prepayments", Account.ASSET, False),
+    "VENDOR_RETURNS": ("1310", "Vendor Returns Receivable", Account.ASSET, False),
     "AP": ("2000", "Accounts Payable", Account.LIABILITY, False),
     "GRNI": ("2100", "Goods Received Not Invoiced", Account.LIABILITY, False),
     "ACCRUED_LANDED": ("2150", "Accrued Landed Costs (freight, duty, brokerage)", Account.LIABILITY, False),
@@ -33,10 +34,12 @@ SYSTEM_ACCOUNTS = {
     "RETAINED": ("3100", "Retained Earnings", Account.EQUITY, False),
     "OPENING": ("3900", "Opening Balance Equity", Account.EQUITY, False),
     "SALES": ("4000", "Sales Revenue", Account.INCOME, False),
+    "SALES_RETURNS": ("4900", "Sales Returns & Allowances", Account.INCOME, False),
     "COGS": ("5000", "Cost of Goods Sold", Account.EXPENSE, False),
     "INV_ADJ": ("5100", "Inventory Adjustments / Shrinkage", Account.EXPENSE, False),
     "PPV": ("5200", "Purchase Price Variance", Account.EXPENSE, False),
     "COMMISSION_EXP": ("6100", "Sales Commissions", Account.EXPENSE, False),
+    "CHARGEBACKS": ("6700", "Customer Chargebacks / Deductions", Account.EXPENSE, False),
     "FX": ("7000", "Realized FX Gain / Loss", Account.EXPENSE, False),
 }
 
@@ -460,15 +463,29 @@ def _aging(docs, as_of, party_attr, amount_fn, due_fn):
 
 
 def ar_aging(as_of):
-    docs = CustomerInvoice.objects.filter(status__in=CustomerInvoice.OPEN_STATUSES, invoice_date__lte=as_of) \
-        .select_related("customer")
-    return _aging(docs, as_of, "customer", lambda d: d.balance_due, lambda d: d.due_date or d.invoice_date)
+    from returns.models import CreditMemo
+
+    docs = list(CustomerInvoice.objects.filter(status__in=CustomerInvoice.OPEN_STATUSES, invoice_date__lte=as_of)
+                .select_related("customer"))
+    # Unapplied credit memos reduce what the customer owes (shown as negative, current)
+    docs += list(CreditMemo.objects.filter(status__in=CreditMemo.OPEN_STATUSES, date__lte=as_of)
+                 .select_related("customer"))
+    return _aging(docs, as_of, "customer",
+                  lambda d: -d.unapplied if isinstance(d, CreditMemo) else d.balance_due,
+                  lambda d: as_of if isinstance(d, CreditMemo) else (d.due_date or d.invoice_date))
 
 
 def ap_aging(as_of):
-    docs = VendorBill.objects.filter(status__in=VendorBill.OPEN_STATUSES, bill_date__lte=as_of) \
-        .select_related("vendor")
-    return _aging(docs, as_of, "vendor", lambda d: d.balance_due_base, lambda d: d.due_date or d.bill_date)
+    from returns.models import VendorCredit
+
+    docs = list(VendorBill.objects.filter(status__in=VendorBill.OPEN_STATUSES, bill_date__lte=as_of)
+                .select_related("vendor"))
+    docs += list(VendorCredit.objects.filter(status__in=VendorCredit.OPEN_STATUSES, date__lte=as_of)
+                 .select_related("vendor"))
+    return _aging(docs, as_of, "vendor",
+                  lambda d: -money(d.unapplied * d.exchange_rate) if isinstance(d, VendorCredit)
+                  else d.balance_due_base,
+                  lambda d: as_of if isinstance(d, VendorCredit) else (d.due_date or d.bill_date))
 
 
 def account_ledger(account, start=None, end=None):
