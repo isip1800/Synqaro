@@ -27,7 +27,7 @@
   <button type="button" data-tab="returns">Returns &amp; credits{% if open_chargebacks %}<span class="count alert">{{ open_chargebacks }}</span>{% elif returns_count %}<span class="count">{{ returns_count }}</span>{% endif %}</button>
   <button type="button" data-tab="locations">Ship-to locations<span class="count">{{ locations|length }}</span></button>
   <button type="button" data-tab="buyers">Buyers<span class="count">{{ buyers|length }}</span></button>
-  <button type="button" data-tab="notes">Notes, files &amp; history{% if note_count %}<span class="count">{{ note_count }}</span>{% endif %}</button>
+  <button type="button" data-tab="notes">Notes &amp; files{% if note_count %}<span class="count">{{ note_count }}</span>{% endif %}</button>
 </div>
 
 {# ------------------------------------------------------------------ Overview #}

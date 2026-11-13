@@ -1,39 +1,135 @@
 {% extends "base.html" %}{% load erp %}
 {% block content %}
 <div class="page-head">
-  <div><h1>{{ object.name }}</h1><div class="sub">{{ object.code }} · {{ object.get_vendor_type_display }} · {{ object.full_address|default:"no address" }}</div></div>
+  <div><h1>{{ object.name }}{% if not object.is_active %} <span class="badge">inactive</span>{% endif %}</h1>
+    <div class="sub">{{ object.code }} · {{ object.get_vendor_type_display }}{% if object.contact_name %} · {{ object.contact_name }}{% endif %}{% if object.email %} · <a href="mailto:{{ object.email }}">{{ object.email }}</a>{% endif %}{% if object.phone %} · {{ object.phone }}{% endif %}</div></div>
   <div class="actions">
-    <a class="btn btn-primary" href="{% url 'purchasing:purchaseorder_create' %}?vendor={{ object.pk }}">+ Purchase order</a>
-    <a class="btn" href="{% url 'accounting:vendorbill_create' %}?vendor={{ object.pk }}&currency={{ object.currency_id }}">+ Bill</a>
-    <a class="btn" href="{% url 'accounting:vendorpayment_create' %}?vendor={{ object.pk }}&currency={{ object.currency_id }}">+ Payment</a>
-    <a class="btn" href="{% url 'portal:contact_create' %}?vendor={{ object.pk }}">+ Portal user</a>
-    <a class="btn" href="{% url 'purchasing:vendor_update' object.pk %}">Edit</a>
+    {% if "purchasing.edit" in perms %}<a class="btn btn-primary" href="{% url 'purchasing:purchaseorder_create' %}?vendor={{ object.pk }}">+ Purchase order</a>{% endif %}
+    {% if "accounting.post" in perms %}<a class="btn" href="{% url 'accounting:vendorbill_create' %}?vendor={{ object.pk }}&currency={{ object.currency_id }}">+ Bill</a>
+    <a class="btn" href="{% url 'accounting:vendorpayment_create' %}?vendor={{ object.pk }}&currency={{ object.currency_id }}">+ Payment</a>{% endif %}
+    {% if "purchasing.edit" in perms %}<a class="btn" href="{% url 'purchasing:vendor_update' object.pk %}">Edit</a>{% endif %}
   </div>
 </div>
-<div class="kpis">
-  {% if "accounting.view" in perms %}<div class="kpi"><div class="label">Payable balance (base)</div><div class="value">{{ object.balance|money }}</div></div>{% endif %}
-  <div class="kpi"><div class="label">Currency / terms</div><div class="value">{{ object.currency }}</div><div class="note">{{ object.payment_terms_days }} days{% if object.default_incoterm %} · {{ object.default_incoterm }}{% endif %}</div></div>
-  <div class="kpi"><div class="label">Contact</div><div class="value" style="font-size:15px">{{ object.contact_name|default:"—" }}</div><div class="note">{{ object.email }} {{ object.phone }}</div></div>
+
+<div class="kpis compact">
+  {% if "accounting.view" in perms %}<div class="kpi"><div class="label">Payable balance ({{ company.base_currency_id }})</div><div class="value">{{ object.balance|money }}</div>{% if overdue_count %}<div class="note" style="color:#b42318">{{ overdue_count }} overdue bill{{ overdue_count|pluralize }}</div>{% else %}<div class="note">{{ open_bills|length }} open bill{{ open_bills|length|pluralize }}</div>{% endif %}</div>{% endif %}
+  <div class="kpi"><div class="label">Open purchase orders</div><div class="value">{% if can_see_costs %}{{ open_po_value|money }}{% else %}{{ open_po_count }}{% endif %}</div><div class="note">{% if can_see_costs %}{{ open_po_count }} PO{{ open_po_count|pluralize }} · {{ object.currency_id }}{% else %}PO{{ open_po_count|pluralize }}{% endif %}</div></div>
+  <div class="kpi"><div class="label">Shipments in transit</div><div class="value">{{ in_transit }}</div><div class="note">{{ shipment_count }} total</div></div>
+  <div class="kpi"><div class="label">Terms</div><div class="value">{{ object.currency_id }} · Net {{ object.payment_terms_days }}</div><div class="note">{% if object.default_incoterm %}{{ object.get_default_incoterm_display }}{% else %}No default incoterm{% endif %}</div></div>
 </div>
-<div class="grid-2">
-  <div class="card table-wrap"><h3>Purchase orders</h3><table class="table compact"><thead><tr><th>PO</th><th>Date</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
-  {% for o in orders %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a></td><td>{{ o.order_date|date:"Y-m-d" }}</td><td class="num">{{ o.total|money }} {{ o.currency }}</td><td>{% status_badge o %}</td></tr>{% empty %}<tr><td colspan="4" class="empty">None.</td></tr>{% endfor %}
+
+<div class="tabs" data-tabs role="tablist">
+  <button type="button" data-tab="overview">Overview</button>
+  <button type="button" data-tab="orders">Purchase orders<span class="count">{{ order_count }}</span></button>
+  <button type="button" data-tab="shipments">Shipments{% if in_transit %}<span class="count">{{ in_transit }} in transit</span>{% else %}<span class="count">{{ shipment_count }}</span>{% endif %}</button>
+  {% if "accounting.view" in perms %}<button type="button" data-tab="bills">Bills<span class="count {% if overdue_count %}alert{% endif %}">{{ open_bills|length }} open</span></button>
+  <button type="button" data-tab="payments">Payments<span class="count">{{ payment_count }}</span></button>{% endif %}
+  <button type="button" data-tab="returns">Returns &amp; credits{% if open_credit_count %}<span class="count alert">{{ open_credit_count }}</span>{% elif returns_count %}<span class="count">{{ returns_count }}</span>{% endif %}</button>
+  {% if can_see_costs %}<button type="button" data-tab="products">Products<span class="count">{{ vendor_products|length }}</span></button>{% endif %}
+  <button type="button" data-tab="portal">Portal users<span class="count">{{ contacts|length }}</span></button>
+  <button type="button" data-tab="notes">Notes &amp; files{% if note_count %}<span class="count">{{ note_count }}</span>{% endif %}</button>
+</div>
+
+{# ------------------------------------------------------------------ Overview #}
+<section data-panel="overview">
+  <div class="grid-2">
+    <div>
+      <div class="card"><h3>Vendor details</h3>
+        <dl class="facts">
+          <div><dt>Vendor code</dt><dd>{{ object.code }}</dd></div>
+          <div><dt>Type</dt><dd>{{ object.get_vendor_type_display }}</dd></div>
+          <div><dt>Contact</dt><dd>{{ object.contact_name|default:"—" }}</dd></div>
+          <div><dt>Email</dt><dd>{% if object.email %}<a href="mailto:{{ object.email }}">{{ object.email }}</a>{% else %}—{% endif %}</dd></div>
+          <div><dt>Phone</dt><dd>{{ object.phone|default:"—" }}</dd></div>
+          <div><dt>Website</dt><dd>{% if object.website %}<a href="{{ object.website }}" target="_blank" rel="noopener">{{ object.website|cut:"https://"|cut:"http://" }}</a>{% else %}—{% endif %}</dd></div>
+          <div><dt>Address</dt><dd>{{ object.full_address|default:"—"|linebreaksbr }}</dd></div>
+          <div><dt>Tax ID</dt><dd>{{ object.tax_id|default:"—" }}</dd></div>
+          <div><dt>Currency</dt><dd>{{ object.currency }}</dd></div>
+          <div><dt>Payment terms</dt><dd>Net {{ object.payment_terms_days }} days</dd></div>
+          <div><dt>Default incoterm</dt><dd>{{ object.get_default_incoterm_display|default:"—" }}</dd></div>
+        </dl>
+        {% if object.notes %}<p class="muted" style="margin-top:14px">{{ object.notes|linebreaksbr }}</p>{% endif %}
+      </div>
+      {% if object.bank_details and "accounting.view" in perms %}<div class="card"><h3>Bank details</h3><pre class="plain">{{ object.bank_details }}</pre></div>{% endif %}
+    </div>
+    <div>
+      <div class="card table-wrap"><div class="panel-head"><h3>Open purchase orders</h3></div><table class="table compact"><tbody>
+        {% for o in open_pos %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a></td><td>{{ o.order_date|date:"Y-m-d" }}</td>{% if can_see_costs %}<td class="num">{{ o.total|money }} {{ o.currency_id }}</td>{% endif %}<td>{% status_badge o %}</td></tr>{% empty %}<tr><td class="empty">No open purchase orders.</td></tr>{% endfor %}
+      </tbody></table></div>
+      <div class="card table-wrap"><div class="panel-head"><h3>Recent shipments</h3></div><table class="table compact"><tbody>
+        {% for s in shipments|slice:":5" %}<tr><td><a href="{{ s.get_absolute_url }}">{{ s.number }}</a></td><td>{{ s.bill_of_lading|default:"" }}</td><td>ETA {{ s.eta|date:"Y-m-d"|default:"—" }}</td><td>{% status_badge s %}</td></tr>{% empty %}<tr><td class="empty">No shipments yet.</td></tr>{% endfor %}
+      </tbody></table></div>
+      {% if "accounting.view" in perms %}<div class="card table-wrap"><div class="panel-head"><h3>Open bills</h3></div><table class="table compact"><tbody>
+        {% for b in open_bills|slice:":5" %}<tr><td><a href="{{ b.get_absolute_url }}">{{ b.number }}</a></td><td>{{ b.vendor_invoice_number }}</td><td>due {{ b.due_date|date:"Y-m-d"|default:"—" }}{% if b.due_date and b.due_date < today %} <span class="badge badge-overdue">overdue</span>{% endif %}</td><td class="num">{{ b.balance_due|money }} {{ b.currency_id }}</td></tr>{% empty %}<tr><td class="empty">Nothing open.</td></tr>{% endfor %}
+      </tbody></table></div>{% endif %}
+    </div>
+  </div>
+</section>
+
+{# ------------------------------------------------------------------ Purchase orders #}
+<section data-panel="orders"><div class="card table-wrap">
+  <div class="panel-head"><h3>Purchase orders</h3><div class="actions">{% if order_count > orders|length %}<a class="btn btn-sm" href="{% url 'purchasing:purchaseorder_list' %}?q={{ object.name|urlencode }}">View all {{ order_count }}</a>{% endif %}{% if "purchasing.edit" in perms %}<a class="btn btn-sm btn-primary" href="{% url 'purchasing:purchaseorder_create' %}?vendor={{ object.pk }}">+ Purchase order</a>{% endif %}</div></div>
+  <table class="table compact"><thead><tr><th>PO</th><th>Date</th><th>Expected</th><th>Vendor ref.</th><th>Ready date</th>{% if can_see_costs %}<th class="num">Total</th>{% endif %}<th>Status</th></tr></thead><tbody>
+  {% for o in orders %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a></td><td>{{ o.order_date|date:"Y-m-d" }}</td><td>{{ o.expected_date|date:"Y-m-d"|default:"" }}</td><td>{{ o.vendor_reference }}</td><td>{{ o.vendor_confirmed_ship_date|date:"Y-m-d"|default:"" }}</td>{% if can_see_costs %}<td class="num">{{ o.total|money }} {{ o.currency_id }}</td>{% endif %}<td>{% status_badge o %}</td></tr>{% empty %}<tr><td colspan="7" class="empty">No purchase orders yet.</td></tr>{% endfor %}
+  </tbody></table></div></section>
+
+{# ------------------------------------------------------------------ Shipments #}
+<section data-panel="shipments"><div class="card table-wrap">
+  <div class="panel-head"><h3>Import shipments</h3>{% if object.vendor_type != 'supplier' %}<div class="actions"><span class="muted">Includes shipments this vendor forwards</span></div>{% endif %}</div>
+  <table class="table compact"><thead><tr><th>Shipment</th><th>Mode</th><th>B/L / AWB</th><th>Route</th><th>ETD</th><th>ETA</th><th>Status</th></tr></thead><tbody>
+  {% for s in shipments %}<tr><td><a href="{{ s.get_absolute_url }}">{{ s.number }}</a></td><td>{{ s.get_mode_display }}</td><td>{{ s.bill_of_lading|default:"—" }}</td><td>{{ s.origin_port }}{% if s.origin_port or s.destination_port %} → {% endif %}{{ s.destination_port }}</td><td>{{ s.etd|date:"Y-m-d"|default:"" }}</td><td>{{ s.eta|date:"Y-m-d"|default:"" }}</td><td>{% status_badge s %}</td></tr>{% empty %}<tr><td colspan="7" class="empty">No shipments yet.</td></tr>{% endfor %}
+  </tbody></table></div></section>
+
+{% if "accounting.view" in perms %}
+{# ------------------------------------------------------------------ Bills #}
+<section data-panel="bills">
+  <div class="card table-wrap"><div class="panel-head"><h3>Open bills</h3>{% if "accounting.post" in perms %}<div class="actions"><a class="btn btn-sm btn-primary" href="{% url 'accounting:vendorbill_create' %}?vendor={{ object.pk }}&currency={{ object.currency_id }}">+ Bill</a></div>{% endif %}</div>
+  <table class="table compact"><thead><tr><th>Bill</th><th>Vendor invoice #</th><th>Date</th><th>Due</th><th class="num">Total</th><th class="num">Balance</th></tr></thead><tbody>
+  {% for b in open_bills %}<tr><td><a href="{{ b.get_absolute_url }}">{{ b.number }}</a></td><td>{{ b.vendor_invoice_number }}</td><td>{{ b.bill_date|date:"Y-m-d" }}</td><td>{{ b.due_date|date:"Y-m-d"|default:"—" }}{% if b.due_date and b.due_date < today %} <span class="badge badge-overdue">overdue</span>{% endif %}</td><td class="num">{{ b.total|money }} {{ b.currency_id }}</td><td class="num">{{ b.balance_due|money }} {{ b.currency_id }}</td></tr>{% empty %}<tr><td colspan="6" class="empty">Nothing open.</td></tr>{% endfor %}
   </tbody></table></div>
-{% if "accounting.view" in perms %}  <div class="card table-wrap"><h3>Bills</h3><table class="table compact"><thead><tr><th>Bill</th><th>Vendor inv.</th><th>Due</th><th class="num">Balance</th><th>Status</th></tr></thead><tbody>
-  {% for b in bills %}<tr><td><a href="{{ b.get_absolute_url }}">{{ b.number }}</a></td><td>{{ b.vendor_invoice_number }}</td><td>{{ b.due_date|date:"Y-m-d"|default:"—" }}</td><td class="num">{{ b.balance_due|money }} {{ b.currency }}</td><td>{% status_badge b %}</td></tr>{% empty %}<tr><td colspan="5" class="empty">None.</td></tr>{% endfor %}
-  </tbody></table></div>{% endif %}
-</div>
-<div class="grid-2">
-  <div class="card table-wrap"><h3>Shipments</h3><table class="table compact"><thead><tr><th>Shipment</th><th>B/L</th><th>ETA</th><th>Status</th></tr></thead><tbody>
-  {% for s in shipments %}<tr><td><a href="{{ s.get_absolute_url }}">{{ s.number }}</a></td><td>{{ s.bill_of_lading|default:"—" }}</td><td>{{ s.eta|date:"Y-m-d"|default:"—" }}</td><td>{% status_badge s %}</td></tr>{% empty %}<tr><td colspan="4" class="empty">None.</td></tr>{% endfor %}
+  <div class="card table-wrap"><div class="panel-head"><h3>Bill history</h3>{% if bill_count > bills|length %}<div class="actions"><a class="btn btn-sm" href="{% url 'accounting:vendorbill_list' %}?q={{ object.name|urlencode }}">View all {{ bill_count }}</a></div>{% endif %}</div>
+  <table class="table compact"><thead><tr><th>Bill</th><th>Vendor invoice #</th><th>Date</th><th>PO</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
+  {% for b in bills %}<tr><td><a href="{{ b.get_absolute_url }}">{{ b.number }}</a></td><td>{{ b.vendor_invoice_number }}</td><td>{{ b.bill_date|date:"Y-m-d" }}</td><td>{% if b.purchase_order_id %}<a href="{{ b.purchase_order.get_absolute_url }}">{{ b.purchase_order.number }}</a>{% endif %}</td><td class="num">{{ b.total|money }} {{ b.currency_id }}</td><td>{% status_badge b %}</td></tr>{% empty %}<tr><td colspan="6" class="empty">No bills yet.</td></tr>{% endfor %}
   </tbody></table></div>
-  {% if can_see_costs %}<div class="card table-wrap"><h3>Products supplied</h3><table class="table compact"><thead><tr><th>Product</th><th>Vendor SKU</th><th class="num">Cost</th></tr></thead><tbody>
-  {% for vp in vendor_products %}<tr><td><a href="{{ vp.product.get_absolute_url }}">{{ vp.product }}</a></td><td>{{ vp.vendor_sku|default:"—" }}</td><td class="num">{{ vp.unit_cost|unitcost }} {{ vp.currency }}</td></tr>{% empty %}<tr><td colspan="3" class="empty">None.</td></tr>{% endfor %}
+</section>
+
+{# ------------------------------------------------------------------ Payments #}
+<section data-panel="payments"><div class="card table-wrap">
+  <div class="panel-head"><h3>Payments made</h3>{% if "accounting.post" in perms %}<div class="actions"><a class="btn btn-sm btn-primary" href="{% url 'accounting:vendorpayment_create' %}?vendor={{ object.pk }}&currency={{ object.currency_id }}">+ Payment</a></div>{% endif %}</div>
+  <table class="table compact"><thead><tr><th>Payment</th><th>Date</th><th>Method</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>
+  {% for p in payments %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a></td><td>{{ p.date|date:"Y-m-d" }}</td><td>{{ p.get_method_display }}</td><td>{{ p.reference }}</td><td class="num">{{ p.amount|money }} {{ p.currency_id }}</td><td>{% status_badge p %}</td></tr>{% empty %}<tr><td colspan="6" class="empty">No payments yet.</td></tr>{% endfor %}
+  </tbody></table></div></section>
+{% endif %}
+
+{# ------------------------------------------------------------------ Returns & credits #}
+<section data-panel="returns"><div class="grid-2">
+  <div class="card table-wrap"><div class="panel-head"><h3>Returns to vendor</h3>{% if "purchasing.edit" in perms %}<div class="actions"><a class="btn btn-sm" href="{% url 'returns:vendorreturn_create' %}?vendor={{ object.pk }}">+ Return</a></div>{% endif %}</div>
+  <table class="table compact"><tbody>
+  {% for r in returns %}<tr><td><a href="{{ r.get_absolute_url }}">{{ r.number }}</a></td><td>{{ r.date|date:"Y-m-d" }}</td><td>{{ r.get_reason_display }}</td>{% if can_see_costs %}<td class="num">{{ r.total|money }}</td>{% endif %}<td>{% status_badge r %}</td></tr>{% empty %}<tr><td class="empty">No returns.</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% if "accounting.view" in perms %}<div class="card table-wrap"><div class="panel-head"><h3>Vendor credits</h3>{% if "accounting.post" in perms %}<div class="actions"><a class="btn btn-sm" href="{% url 'returns:vendorcredit_create' %}?vendor={{ object.pk }}&currency={{ object.currency_id }}">+ Vendor credit</a></div>{% endif %}</div>
+  <table class="table compact"><tbody>
+  {% for c in credits %}<tr><td><a href="{{ c.get_absolute_url }}">{{ c.number }}</a></td><td>{{ c.vendor_credit_number }}</td><td>{{ c.date|date:"Y-m-d" }}</td><td class="num">{{ c.total|money }} {{ c.currency_id }}</td><td class="num muted">{% if c.unapplied and c.status != 'draft' %}{{ c.unapplied|money }} left{% endif %}</td><td>{% status_badge c %}</td></tr>{% empty %}<tr><td class="empty">No vendor credits.</td></tr>{% endfor %}
   </tbody></table></div>{% endif %}
-</div>
-<div class="card"><h3>Vendor portal users</h3>
-{% for c in contacts %}<div>{{ c.user.get_full_name|default:c.user.username }} ({{ c.user.username }}){% if c.title %} — {{ c.title }}{% endif %}</div>{% empty %}<p class="muted">No portal access yet. Add a portal user so this vendor can confirm POs, post shipment details, upload documents and submit invoices.</p>{% endfor %}
-</div>
-{% if object.notes or object.bank_details %}<div class="grid-2">{% if object.bank_details %}<div class="card"><h3>Bank details</h3><pre class="plain">{{ object.bank_details }}</pre></div>{% endif %}{% if object.notes %}<div class="card"><h3>Notes</h3>{{ object.notes|linebreaksbr }}</div>{% endif %}</div>{% endif %}
-{% history_panel object %}
+</div></section>
+
+{% if can_see_costs %}
+{# ------------------------------------------------------------------ Products #}
+<section data-panel="products"><div class="card table-wrap">
+  <div class="panel-head"><h3>Products supplied</h3></div>
+  <table class="table compact"><thead><tr><th></th><th>Product</th><th>Vendor SKU</th><th class="num">Cost</th></tr></thead><tbody>
+  {% for vp in vendor_products %}<tr><td>{% with img=vp.product.primary_image %}{% if img %}<img class="line-thumb" src="{{ img.thumb_url }}" alt="" loading="lazy">{% endif %}{% endwith %}</td><td><a href="{{ vp.product.get_absolute_url }}">{{ vp.product }}</a></td><td>{{ vp.vendor_sku|default:"—" }}</td><td class="num">{{ vp.unit_cost|unitcost }} {{ vp.currency }}</td></tr>{% empty %}<tr><td colspan="4" class="empty">No products linked to this vendor yet (add them on the item's Vendors tab).</td></tr>{% endfor %}
+  </tbody></table></div></section>
+{% endif %}
+
+{# ------------------------------------------------------------------ Portal users #}
+<section data-panel="portal"><div class="card table-wrap">
+  <div class="panel-head"><h3>Vendor portal users</h3>{% if "users.manage" in perms %}<div class="actions"><a class="btn btn-sm btn-primary" href="{% url 'portal:contact_create' %}?vendor={{ object.pk }}">+ Portal user</a></div>{% endif %}</div>
+  <table class="table compact"><thead><tr><th>Name</th><th>Login</th><th>Title</th><th>Email</th><th>Can submit invoices</th><th>Status</th></tr></thead><tbody>
+  {% for c in contacts %}<tr><td>{{ c.user.get_full_name|default:"—" }}</td><td>{{ c.user.username }}</td><td>{{ c.title }}</td><td>{{ c.user.email }}</td><td>{% if c.can_submit_invoices %}✓{% endif %}</td><td>{% if c.user.is_active %}<span class="badge badge-posted">active</span>{% else %}<span class="badge">disabled</span>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="6" class="empty">No portal access yet. Add a portal user so this vendor can confirm POs, post shipment details, upload documents and submit invoices.</td></tr>{% endfor %}
+  </tbody></table></div></section>
+
+{# ------------------------------------------------------------------ Notes, files & history #}
+<section data-panel="notes">{% notes_and_files object %}</section>
 {% endblock %}

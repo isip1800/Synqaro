@@ -175,3 +175,22 @@ class FirstSaleTests(TestCase):
         page = self.client.get(f"/purchasing/orders/{po.pk}/").content.decode()
         self.assertIn("Ext FS Cost RMB", page)
         self.assertIn("Dutiable value", self.client.get(f"/purchasing/shipments/{ship.pk}/").content.decode())
+
+
+class VendorPageTests(TestCase):
+    def test_vendor_page_tabs_by_role(self):
+        from core.testing import Fixture
+
+        f = Fixture()
+        self.client.force_login(f.user)
+        html = self.client.get(f.vendor.get_absolute_url()).content.decode()
+        for tab in ("overview", "orders", "shipments", "bills", "payments", "returns", "products", "portal", "notes"):
+            self.assertIn(f'data-tab="{tab}"', html)
+        f.member("wh", "Warehouse")
+        self.client.login(username="wh", password="pw-test-1234")
+        r = self.client.get(f.vendor.get_absolute_url())
+        self.assertEqual(r.status_code, 200)
+        html = r.content.decode()
+        for tab in ("bills", "payments", "products"):  # no accounting / cost access
+            self.assertNotIn(f'data-tab="{tab}"', html)
+        self.assertIn('data-tab="orders"', html)
