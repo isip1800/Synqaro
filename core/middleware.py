@@ -46,6 +46,7 @@ class CompanyMiddleware:
         try:
             from .models import Company
 
+            Company.clear_cache()  # company settings may have changed in another server process
             request.company = Company.get()
             return self.get_response(request)
         finally:

@@ -56,17 +56,46 @@ def use_company(company):
         _current.reset(token)
 
 
+class CurrentCompany(models.Expression):
+    """WHERE condition `company_id = <current company>` decided when the SQL is compiled, not when the queryset
+    is built. Querysets created once and reused — form dropdowns, class attributes, module-level constants —
+    therefore always show the company of the request that runs them. No company active: no restriction."""
+
+    conditional = True
+    output_field = models.BooleanField()
+
+    def __init__(self, col=None):
+        super().__init__()
+        self.col = col
+
+    def get_source_expressions(self):
+        return [self.col] if self.col is not None else []
+
+    def set_source_expressions(self, exprs):
+        self.col = exprs[0] if exprs else None
+
+    def resolve_expression(self, query=None, allow_joins=True, reuse=None, summarize=False, for_save=False):
+        c = self.copy()
+        c.col = models.F("company_id").resolve_expression(query, allow_joins, reuse, summarize, for_save)
+        return c
+
+    def as_sql(self, compiler, connection):
+        cid = _current.get()
+        if cid is None:
+            return "1=1", []
+        sql, params = compiler.compile(self.col)
+        return f"{sql} = %s", [*params, cid]
+
+
 class TenantQuerySet(models.QuerySet):
     pass
 
 
 class TenantManager(models.Manager.from_queryset(TenantQuerySet)):
-    """Only rows of the current company (all rows when no company is active)."""
+    """Only rows of the current company (all rows when no company is active), decided at query time."""
 
     def get_queryset(self):
-        qs = super().get_queryset()
-        cid = _current.get()
-        return qs.filter(company_id=cid) if cid is not None else qs
+        return super().get_queryset().filter(CurrentCompany())
 
 
 class TenantModel(models.Model):

@@ -1,6 +1,9 @@
+import io
+
 from decimal import Decimal as D
 
-from django.test import TestCase
+from django.test import Client, TestCase
+from django.urls import reverse
 
 from accounting.models import Account, JournalEntry
 from core.models import Company, Membership, Role
@@ -183,3 +186,69 @@ class CreateButtonTests(TestCase):
         self.assertIsNone(self.client.get("/purchasing/receipts/").context.get("create_url"))
         self.assertNotIn("+ New item", self.client.get("/products/items/").content.decode())
         self.assertIsNotNone(self.client.get("/sales/orders/").context["create_url"])
+
+
+class SecondCompanyStartupTests(TestCase):
+    """A second company (with copied product setup) must not break deploy-time commands or see company 1 data."""
+
+    def test_startup_commands_and_isolation(self):
+        from django.core.management import call_command
+        from django.contrib.auth import get_user_model
+
+        from accounting.models import Account, CustomerInvoice
+        from core.models import Company
+        from products.models import ItemClass, LookupValue, Product
+        from sales.models import Customer, SalesOrder
+
+        call_command("setup_erp", admin="admin", password="pw-admin-123", stdout=io.StringIO())
+        call_command("load_product_setup", stdout=io.StringIO())
+        call_command("seed_demo", if_empty=True, admin="admin", password="pw-admin-123", stdout=io.StringIO())
+        first = Company.get_default()
+        admin = get_user_model().objects.get(username="admin")
+        c = Client()
+        c.force_login(admin)
+        r = c.post(reverse("core:company_list"), {"name": "Second Co", "base_currency": "USD", "copy_setup": "on"})
+        self.assertEqual(r.status_code, 302)
+        second = Company.objects.get(name="Second Co")
+        self.assertEqual(Product.all_companies.filter(company=second).count(), 0)
+        self.assertEqual(Customer.all_companies.filter(company=second).count(), 0)
+        self.assertGreater(ItemClass.all_companies.filter(company=second).count(), 0)
+
+        # Render runs these on every start: they must still work with two companies
+        out = io.StringIO()
+        call_command("setup_erp", admin="admin", password="pw-admin-123", stdout=out)
+        call_command("load_product_setup", stdout=out)
+        call_command("seed_demo", if_empty=True, admin="admin", password="pw-admin-123", stdout=out)
+        self.assertEqual(LookupValue.all_companies.filter(company=second).count(),
+                         LookupValue.all_companies.filter(company=first).count())
+        self.assertEqual(Account.all_companies.filter(company=second, system_key="AR").count(), 1)
+
+        # Working in the new company shows none of the first company's documents
+        self.assertGreater(SalesOrder.all_companies.filter(company=first).count(), 0)
+        names = list(Customer.all_companies.filter(company=first).values_list("name", flat=True))
+        for url in ["/", "/sales/orders/", "/sales/customers/", "/accounting/invoices/", "/products/items/",
+                    "/sales/orders/new/", "/inventory/stock/"]:
+            html = c.get(url).content.decode()
+            for n in names:
+                self.assertNotIn(n, html, url)
+            for doc in SalesOrder.all_companies.filter(company=first)[:3]:
+                self.assertNotIn(doc.number + "<", html, url)
+            for inv in CustomerInvoice.all_companies.filter(company=first)[:3]:
+                self.assertNotIn(inv.number + "<", html, url)
+
+
+class LazyCompanyFilterTests(TestCase):
+    def test_queryset_built_in_one_company_runs_in_another(self):
+        f = Fixture()
+        first = Company.get_default()
+        second = create_company("Other Co")
+        with use_company(second):
+            Customer.objects.create(code="Z1", name="Zed Retail")
+        with use_company(first):
+            qs = Customer.objects.filter(name__icontains="e")  # built while company 1 is current
+        with use_company(second):
+            self.assertEqual([c.name for c in qs.all()], ["Zed Retail"])
+            self.assertEqual(Customer.objects.filter(pk__in=qs.values("pk")).count(), 1)
+        with use_company(first):
+            self.assertEqual([c.name for c in qs.all()], [f.customer.name])
+        self.assertEqual(Customer.objects.count(), 2)  # no company active: everything (scripts, migrations)
