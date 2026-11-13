@@ -98,5 +98,33 @@ document.querySelectorAll('[data-formset]').forEach(function (fs) {
   });
 })();
 </script>
+<script>
+// Tabs: remember the open tab in the URL (#tab), and open the tab holding any #anchor we were sent back to.
+document.querySelectorAll('[data-tabs]').forEach(function (bar) {
+  var scope = bar.parentElement, buttons = bar.querySelectorAll('[data-tab]');
+  function panels() { return scope.querySelectorAll('[data-panel]'); }
+  function show(name, push) {
+    var found = false;
+    buttons.forEach(function (b) { var on = b.dataset.tab === name; b.classList.toggle('active', on); found = found || on; });
+    if (!found) return false;
+    panels().forEach(function (p) { p.classList.toggle('active', p.dataset.panel === name); });
+    if (push) history.replaceState(null, '', '#' + name);
+    return true;
+  }
+  buttons.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.tab, true); }); });
+  function fromHash() {
+    var hash = decodeURIComponent(location.hash.slice(1));
+    if (!hash) return false;
+    if (show(hash, false)) return true;
+    var el = document.getElementById(hash), panel = el && el.closest('[data-panel]');
+    if (!panel) return false;
+    show(panel.dataset.panel, false);
+    setTimeout(function () { el.scrollIntoView({block: 'start'}); }, 0);
+    return true;
+  }
+  window.addEventListener('hashchange', fromHash);
+  if (!fromHash() && buttons.length) show(buttons[0].dataset.tab, false);
+});
+</script>
 </body>
 </html>

@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 from core.crud import ErpCreateView, ErpDetailView, ErpListView, ErpUpdateView, run_action
 from core.mixins import internal_required
 from core.models import Company, default_warehouse
-from core.utils import d
+from core.utils import ZERO, d
 
 from . import services
 from .forms import CustomerForm, SalesOrderForm, SOLineFormSet
@@ -54,15 +54,39 @@ class CustomerDetail(ErpDetailView):
     def get_context_data(self, **kwargs):
         from accounting.models import CustomerInvoice
 
+        from core.models import Attachment, Note
+        from django.contrib.contenttypes.models import ContentType
+        from returns.models import Chargeback, CreditMemo
+
         ctx = super().get_context_data(**kwargs)
         c = self.object
+        today = datetime.date.today()
+        open_invoices = list(c.invoices.filter(status__in=CustomerInvoice.OPEN_STATUSES)
+                             .prefetch_related("lines").order_by("due_date"))
+        ct = ContentType.objects.get_for_model(Customer)
         ctx.update(
-            orders=c.sales_orders.all()[:20],
-            open_invoices=c.invoices.filter(status__in=CustomerInvoice.OPEN_STATUSES).prefetch_related("lines"),
-            invoices=c.invoices.prefetch_related("lines")[:20],
-            payments=c.payments.all()[:10],
-            today=datetime.date.today(),
+            today=today,
+            orders=c.sales_orders.prefetch_related("lines").order_by("-order_date", "-id")[:50],
+            open_orders=c.sales_orders.filter(status__in=SalesOrder.OPEN_STATUSES).count(),
+            order_count=c.sales_orders.count(),
+            open_invoices=open_invoices,
+            overdue_count=sum(1 for i in open_invoices if i.due_date and i.due_date < today),
+            invoices=c.invoices.prefetch_related("lines").order_by("-invoice_date", "-id")[:50],
+            invoice_count=c.invoices.count(),
+            payments=c.payments.order_by("-date", "-id")[:50],
+            payment_count=c.payments.count(),
+            returns=c.returns.prefetch_related("lines").order_by("-date", "-id")[:25],
+            credit_memos=c.credit_memos.prefetch_related("lines").order_by("-date", "-id")[:25],
+            chargebacks=c.chargebacks.select_related("invoice").order_by("-date", "-id")[:25],
+            open_chargebacks=c.chargebacks.filter(status__in=[Chargeback.OPEN, Chargeback.DISPUTED]).count(),
+            unapplied_credit=sum((m.unapplied for m in c.credit_memos.filter(status__in=CreditMemo.OPEN_STATUSES)
+                                  .prefetch_related("lines")), ZERO),
+            locations=list(c.locations.all()),
+            buyers=list(c.buyers.all()),
+            note_count=Note.objects.filter(content_type=ct, object_id=c.pk).count()
+            + Attachment.objects.filter(content_type=ct, object_id=c.pk).count(),
         )
+        ctx["returns_count"] = len(ctx["returns"]) + len(ctx["credit_memos"]) + len(ctx["chargebacks"])
         return ctx
 
 
